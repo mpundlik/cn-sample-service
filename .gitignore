@@ -1,0 +1,12 @@
+.idea/
+glide.lock
+
+#---------
+# eclipse
+*.classpath
+*.project
+*.settings
+
+#---------
+# oops...
+.gitignore.swp
