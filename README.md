@@ -9,7 +9,7 @@
 The CN sample service showcases the extensibility of [vpp-agent](https://github.com/ligato/vpp-agent) 
 and [cn-infra](https://github.com/ligato/cn-infra). Both vpp-agent and cn-infra have their own examples
 but this dedicated repository demonstrates the [dependency management](Glide) and building using [makefiles](Makefile).
-Use this repository like skeleton for your software projects (copy&paste it at the very beginning).
+Use this repository as skeleton for your software projects (copy&paste it at the very beginning).
 
 ![sample_service](docs/imgs/sample_service.png "Sample service plugins")
 
@@ -60,5 +60,5 @@ repetitive lines in Makefile.
 
 ## Glide
 Glide.yaml contains import of the vpp-agent therefore vendor directory in source codes of this repository
-will contain all transitive dependencies of the vpp-agent. Note, if you use just subset of these vendor package
-golang will statically build/link only the subset (not all pacakges in vendor).
+will contain all transitive dependencies of the vpp-agent. Note, if you use just subset of these vendor packages
+golang will statically build/link only the subset (not all packages in vendor).
