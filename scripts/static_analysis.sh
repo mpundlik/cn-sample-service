@@ -8,8 +8,8 @@ function static_analysis() {
   local PWD=$(pwd)
 
   local FILES=$(find "${PWD}" -mount -name "*.go" -type f -not -path "${PWD}/vendor/*" -exec grep -LE "${WHITELIST_CONTENT}"  {} +)
-
-  local ALL=""
+  local CMD$(${TOOL} "${PWD}/cmd${SELECTOR}")
+  local ALL="$CMD"
 
   local OUT=$(echo "${ALL}" | grep -F "${FILES}" | grep -v "${WHITELIST_ERRORS}")
   if [[ ! -z $OUT ]] ; then

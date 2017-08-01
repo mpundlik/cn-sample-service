@@ -1,2 +1,4 @@
 package: cn-sample-service
-import: []
+import:
+- package: github.com/ligato/vpp-agent
+  version: 9b1e57b07a1dbda7e76f2fb0a7e2f584eb568b92
