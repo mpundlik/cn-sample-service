@@ -1,0 +1,38 @@
+package: github.com/ligato/vpp-agent
+import:
+- package: github.com/ligato/cn-infra
+  version: 548bb1182483f7d3b648c6404f9fe530152db136
+- package: github.com/wadey/gocovmerge
+  version: b5bfa59ec0adc420475f97f89b58045c721d761c
+- package: github.com/onsi/gomega
+  version: v1.2.0
+- package: git.fd.io/govpp.git
+  version: 3ec4064566b9e4db1a88c007e0d9a513f7673b36
+  repo: https://git.fd.io/govpp.git
+  subpackages:
+  - adapter
+  - adapter/mock
+  - adapter/mock/binapi_reflect
+  - adapter/vppapiclient
+  - api
+  - api/ifcounters
+  - core
+- package: github.com/vishvananda/netns
+  version: 54f0e4339ce73702a0607f49922aaa1e749b418d
+  repo: https://github.com/vishvananda/netns
+- package: github.com/vishvananda/netlink
+  version: 99091d844046e6b17e4b094e937e8e9254afbfbd
+  repo: https://github.com/vishvananda/netlink
+- package: github.com/opencontainers/runc
+  version: 2d41c047c83e09a6d61d464906feb2a2f3c52aa4
+  repo: https://github.com/docker/runc
+- package: github.com/docker/docker
+  version: d311a3a681f918906249a1678eab0136ac663f6e
+- package: github.com/fsouza/go-dockerclient
+  version: 9e921e30db8bcc1221fa0485ad9ce5b195fb4445
+- package: github.com/spf13/cobra
+  version: e606913c4ee45fec232e67e70105fb6c866b95d9
+- package: github.com/logrusorgru/aurora.git
+  version: 962a6974312dde57d1f6f5738b4f83e1af9f38a4
+- package: github.com/buger/goterm
+  version: bc6c333206f446a53cac4db5d2e6a4316139d737
