@@ -18,7 +18,8 @@ The sample service repository contains:
 * [Hello World!](cmd/helloworld) - minimalistic extension of the vpp-agent
 * [Cassandra](cmd/cassandra) - comming soon (it is supposed to showcase REST API calls that work with Cassandra)
 * Plugins from [vpp-agent](https://github.com/ligato/vpp-agent/tree/master/plugins) and [cn-infra](https://github.com/ligato/cn-infra)
-* [Core from cn-infra](https://github.com/ligato/cn-infra/tree/master/core) - lifecycle management of plugins (loading, 
+* [Core](https://github.com/ligato/cn-infra/tree/master/core) from cn-infra - lifecycle management of plugins (loading, 
+initialization, unloading)
 
 ## Quickstart
 
