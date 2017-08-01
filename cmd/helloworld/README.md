@@ -1,11 +1,11 @@
 # HelloWorld
 
-HelloWorld as the name suggest is a simple extension of vpp-agent. It add a single plugin that creates
+HelloWorld as the name suggest is a simple extension of vpp-agent. It adds a single plugin that creates
 a custom logger an logs a message "Hello World!!!". The aim of this example is to list basic steps that
-are necessary in order to add a custom plugin to vpp-agent.
+are necessary in order to integrate a custom plugin to vpp-agent.
 
 1. Use an existing flavour - collection of plugins
-```
+```go
 	import "github.com/ligato/vpp-agent/flavours/vpp"
 
 
@@ -13,7 +13,7 @@ are necessary in order to add a custom plugin to vpp-agent.
 ```
 Alternatively, you can create a custom [flavour](https://github.com/ligato/vpp-agent/tree/master/flavours).
 
-2. Declare a structure for your plugin. Apart from the internal fields the structure must specifify
+2. Declare a structure for your plugin. Apart from the internal fields the structure must specify
 the dependencies of the plugin.
 
 ```go
@@ -29,7 +29,7 @@ type HelloWorldPlugin struct {
 
 3. Implement plugin lifecycle methods. `Init()` and `Close` are mandatory `AfterInit` is optional.
 
-```
+```go
 // Init is called on plugin startup. New logger is instantiated.
 func (plugin *HelloWorldPlugin) Init() (err error) {
     // use injected dependencies in this case to create a logger
@@ -50,9 +50,9 @@ func (plugin *HelloWorldPlugin) Close() error {
 }
 ```
  
-4. Create plugin instance and inject the dependencies
+4. Create plugin instance and inject the dependencies.
 
-```
+```go
     	// create an instance of the plugin
     	hwPlugin := HelloWorldPlugin{}
     
@@ -62,7 +62,7 @@ func (plugin *HelloWorldPlugin) Close() error {
 
 5. Pass all the plugins to the constructor and start the agent.
 
-```
+```go
 	// Create new agent
 	agent := core.NewAgent(logroot.Logger(), 15*time.Second, append(f.Plugins(), &core.NamedPlugin{PluginName: PluginID, Plugin: &hwPlugin})...)
 
