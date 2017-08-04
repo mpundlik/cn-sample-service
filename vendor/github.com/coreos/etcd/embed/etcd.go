@@ -16,17 +16,17 @@ package embed
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	defaultLog "log"
 	"net"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"sync"
 	"time"
 
 	"github.com/coreos/etcd/etcdserver"
+	"github.com/coreos/etcd/etcdserver/api/etcdhttp"
 	"github.com/coreos/etcd/etcdserver/api/v2http"
 	"github.com/coreos/etcd/pkg/cors"
 	"github.com/coreos/etcd/pkg/debugutil"
@@ -55,9 +55,10 @@ const (
 
 // Etcd contains a running etcd server and its listeners.
 type Etcd struct {
-	Peers   []*peerListener
-	Clients []net.Listener
-	Server  *etcdserver.EtcdServer
+	Peers            []*peerListener
+	Clients          []net.Listener
+	metricsListeners []net.Listener
+	Server           *etcdserver.EtcdServer
 
 	cfg   Config
 	stopc chan struct{}
@@ -119,7 +120,7 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 		}
 	}
 
-	srvcfg := &etcdserver.ServerConfig{
+	srvcfg := etcdserver.ServerConfig{
 		Name:                    cfg.Name,
 		ClientURLs:              cfg.ACUrls,
 		PeerURLs:                cfg.APUrls,
@@ -138,7 +139,10 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 		TickMs:                  cfg.TickMs,
 		ElectionTicks:           cfg.ElectionTicks(),
 		AutoCompactionRetention: cfg.AutoCompactionRetention,
+		AutoCompactionMode:      cfg.AutoCompactionMode,
 		QuotaBackendBytes:       cfg.QuotaBackendBytes,
+		MaxTxnOps:               cfg.MaxTxnOps,
+		MaxRequestBytes:         cfg.MaxRequestBytes,
 		StrictReconfigCheck:     cfg.StrictReconfigCheck,
 		ClientCertAuthEnabled:   cfg.ClientTLSInfo.ClientCertAuth,
 		AuthToken:               cfg.AuthToken,
@@ -149,7 +153,7 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 	}
 
 	// configure peer handlers after rafthttp.Transport started
-	ph := v2http.NewPeerHandler(e.Server)
+	ph := etcdhttp.NewPeerHandler(e.Server)
 	for i := range e.Peers {
 		srv := &http.Server{
 			Handler:     ph,
@@ -186,11 +190,29 @@ func (e *Etcd) Config() Config {
 func (e *Etcd) Close() {
 	e.closeOnce.Do(func() { close(e.stopc) })
 
-	// (gRPC server) stops accepting new connections,
-	// RPCs, and blocks until all pending RPCs are finished
+	timeout := 2 * time.Second
+	if e.Server != nil {
+		timeout = e.Server.Cfg.ReqTimeout()
+	}
 	for _, sctx := range e.sctxs {
 		for gs := range sctx.grpcServerC {
-			gs.GracefulStop()
+			ch := make(chan struct{})
+			go func() {
+				defer close(ch)
+				// close listeners to stop accepting new connections,
+				// will block on any existing transports
+				gs.GracefulStop()
+			}()
+			// wait until all pending RPCs are finished
+			select {
+			case <-ch:
+			case <-time.After(timeout):
+				// took too long, manually close open transports
+				// e.g. watch streams
+				gs.Stop()
+				// concurrent GracefulStop should be interrupted
+				<-ch
+			}
 		}
 	}
 
@@ -201,6 +223,9 @@ func (e *Etcd) Close() {
 		if e.Clients[i] != nil {
 			e.Clients[i].Close()
 		}
+	}
+	for i := range e.metricsListeners {
+		e.metricsListeners[i].Close()
 	}
 
 	// close rafthttp transports
@@ -221,19 +246,9 @@ func (e *Etcd) Close() {
 func (e *Etcd) Err() <-chan error { return e.errc }
 
 func startPeerListeners(cfg *Config) (peers []*peerListener, err error) {
-	if cfg.PeerAutoTLS && cfg.PeerTLSInfo.Empty() {
-		phosts := make([]string, len(cfg.LPUrls))
-		for i, u := range cfg.LPUrls {
-			phosts[i] = u.Host
-		}
-		cfg.PeerTLSInfo, err = transport.SelfCert(filepath.Join(cfg.Dir, "fixtures", "peer"), phosts)
-		if err != nil {
-			plog.Fatalf("could not get certs (%v)", err)
-		}
-	} else if cfg.PeerAutoTLS {
-		plog.Warningf("ignoring peer auto TLS since certs given")
+	if err = cfg.PeerSelfCert(); err != nil {
+		plog.Fatalf("could not get certs (%v)", err)
 	}
-
 	if !cfg.PeerTLSInfo.Empty() {
 		plog.Infof("peerTLS: %s", cfg.PeerTLSInfo)
 	}
@@ -275,19 +290,9 @@ func startPeerListeners(cfg *Config) (peers []*peerListener, err error) {
 }
 
 func startClientListeners(cfg *Config) (sctxs map[string]*serveCtx, err error) {
-	if cfg.ClientAutoTLS && cfg.ClientTLSInfo.Empty() {
-		chosts := make([]string, len(cfg.LCUrls))
-		for i, u := range cfg.LCUrls {
-			chosts[i] = u.Host
-		}
-		cfg.ClientTLSInfo, err = transport.SelfCert(filepath.Join(cfg.Dir, "fixtures", "client"), chosts)
-		if err != nil {
-			plog.Fatalf("could not get certs (%v)", err)
-		}
-	} else if cfg.ClientAutoTLS {
-		plog.Warningf("ignoring client auto TLS since certs given")
+	if err = cfg.ClientSelfCert(); err != nil {
+		plog.Fatalf("could not get certs (%v)", err)
 	}
-
 	if cfg.EnablePprof {
 		plog.Infof("pprof is enabled under %s", debugutil.HTTPPrefixPProf)
 	}
@@ -326,6 +331,9 @@ func startClientListeners(cfg *Config) (sctxs map[string]*serveCtx, err error) {
 		if sctx.l, err = net.Listen(proto, addr); err != nil {
 			return nil, err
 		}
+		// net.Listener will rewrite ipv4 0.0.0.0 to ipv6 [::], breaking
+		// hosts that disable ipv6. So, use the address given by the user.
+		sctx.addr = addr
 
 		if fdLimit, fderr := runtimeutil.FDLimit(); fderr == nil {
 			if fdLimit <= reservedInternalFDNum {
@@ -363,12 +371,8 @@ func startClientListeners(cfg *Config) (sctxs map[string]*serveCtx, err error) {
 }
 
 func (e *Etcd) serve() (err error) {
-	var ctlscfg *tls.Config
 	if !e.cfg.ClientTLSInfo.Empty() {
 		plog.Infof("ClientTLS: %s", e.cfg.ClientTLSInfo)
-		if ctlscfg, err = e.cfg.ClientTLSInfo.ServerConfig(); err != nil {
-			return err
-		}
 	}
 
 	if e.cfg.CorsInfo.String() != "" {
@@ -383,18 +387,43 @@ func (e *Etcd) serve() (err error) {
 	}
 
 	// Start a client server goroutine for each listen address
-	var v2h http.Handler
+	var h http.Handler
 	if e.Config().EnableV2 {
-		v2h = http.Handler(&cors.CORSHandler{
-			Handler: v2http.NewClientHandler(e.Server, e.Server.Cfg.ReqTimeout()),
-			Info:    e.cfg.CorsInfo,
-		})
+		h = v2http.NewClientHandler(e.Server, e.Server.Cfg.ReqTimeout())
+	} else {
+		mux := http.NewServeMux()
+		etcdhttp.HandleBasic(mux, e.Server)
+		h = mux
 	}
+	h = http.Handler(&cors.CORSHandler{Handler: h, Info: e.cfg.CorsInfo})
+
 	for _, sctx := range e.sctxs {
 		go func(s *serveCtx) {
-			e.errHandler(s.serve(e.Server, ctlscfg, v2h, e.errHandler))
+			e.errHandler(s.serve(e.Server, &e.cfg.ClientTLSInfo, h, e.errHandler))
 		}(sctx)
 	}
+
+	if len(e.cfg.ListenMetricsUrls) > 0 {
+		metricsMux := http.NewServeMux()
+		etcdhttp.HandleMetricsHealth(metricsMux, e.Server)
+
+		for _, murl := range e.cfg.ListenMetricsUrls {
+			tlsInfo := &e.cfg.ClientTLSInfo
+			if murl.Scheme == "http" {
+				tlsInfo = nil
+			}
+			ml, err := transport.NewListener(murl.Host, murl.Scheme, tlsInfo)
+			if err != nil {
+				return err
+			}
+			e.metricsListeners = append(e.metricsListeners, ml)
+			go func(u url.URL, ln net.Listener) {
+				plog.Info("listening for metrics on ", u.String())
+				e.errHandler(http.Serve(ln, metricsMux))
+			}(murl, ml)
+		}
+	}
+
 	return nil
 }
 

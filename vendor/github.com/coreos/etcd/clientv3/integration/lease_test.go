@@ -286,8 +286,12 @@ func TestLeaseGrantErrConnClosed(t *testing.T) {
 	go func() {
 		defer close(donec)
 		_, err := cli.Grant(context.TODO(), 5)
-		if err != nil && err != grpc.ErrClientConnClosing {
-			t.Fatalf("expected %v, got %v", grpc.ErrClientConnClosing, err)
+		if err != nil && err != grpc.ErrClientConnClosing && err != context.Canceled {
+			// grpc.ErrClientConnClosing if grpc-go balancer calls 'Get' after client.Close.
+			// context.Canceled if grpc-go balancer calls 'Get' with inflight client.Close,
+			// soon transportMonitor selects on ClientTransport.Error() and resetTransport(false)
+			// that cancels the context and closes the transport.
+			t.Fatalf("expected %v or %v, got %v", grpc.ErrClientConnClosing, context.Canceled, err)
 		}
 	}()
 
@@ -482,7 +486,8 @@ func TestLeaseTimeToLive(t *testing.T) {
 	clus := integration.NewClusterV3(t, &integration.ClusterConfig{Size: 3})
 	defer clus.Terminate(t)
 
-	lapi := clus.RandClient()
+	c := clus.RandClient()
+	lapi := c
 
 	resp, err := lapi.Grant(context.Background(), 10)
 	if err != nil {
@@ -495,6 +500,11 @@ func TestLeaseTimeToLive(t *testing.T) {
 		if _, err = kv.Put(context.TODO(), keys[i], "bar", clientv3.WithLease(resp.ID)); err != nil {
 			t.Fatal(err)
 		}
+	}
+
+	// linearized read to ensure Puts propagated to server backing lapi
+	if _, err := c.Get(context.TODO(), "abc"); err != nil {
+		t.Fatal(err)
 	}
 
 	lresp, lerr := lapi.TimeToLive(context.Background(), resp.ID, clientv3.WithAttachedKeys())

@@ -32,6 +32,8 @@
 		CompactionRequest
 		CompactionResponse
 		HashRequest
+		HashKVRequest
+		HashKVResponse
 		HashResponse
 		SnapshotRequest
 		SnapshotResponse
@@ -58,6 +60,8 @@
 		MemberListResponse
 		DefragmentRequest
 		DefragmentResponse
+		MoveLeaderRequest
+		MoveLeaderResponse
 		AlarmRequest
 		AlarmMember
 		AlarmResponse

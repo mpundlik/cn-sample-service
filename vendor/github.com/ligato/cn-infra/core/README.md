@@ -1,8 +1,10 @@
-## Agent
+## CN-Infra Core
 
-The cn-infra provides building blocks to construct a management tool also known as an agent. The agent is designed to be
-composed of multiple small blocks providing a certain functionality. These blocks are called plugins. Lifecycle of the plugins
-is managed by the core. This package defines API between Agent Core and Agent Plugins (illustrated also on following diagram).
+The `core` package contains the CN-Infra Core that manages the startup
+and shutdown of an CN-Infra based management/control plane app. The 
+`core` package also defines the CN-Infra Core's SPI that must be 
+implemented by each plugin. The SPI is used by the Core to init, start
+and shut down each plugin. 
 
 ```
                                        +-----------------------+
@@ -26,4 +28,4 @@ is managed by the core. This package defines API between Agent Core and Agent Pl
                                        |   + AfterInit() error |
                                        |   + Close() error     |
                                        +-----------------------+
-```
+``` 

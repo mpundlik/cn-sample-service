@@ -25,6 +25,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 )
 
 const (
@@ -40,10 +41,9 @@ type WatchChan <-chan WatchResponse
 
 type Watcher interface {
 	// Watch watches on a key or prefix. The watched events will be returned
-	// through the returned channel.
-	// If the watch is slow or the required rev is compacted, the watch request
-	// might be canceled from the server-side and the chan will be closed.
-	// 'opts' can be: 'WithRev' and/or 'WithPrefix'.
+	// through the returned channel. If revisions waiting to be sent over the
+	// watch are compacted, then the watch will be canceled by the server, the
+	// client will post a compacted error watch response, and the channel will close.
 	Watch(ctx context.Context, key string, opts ...OpOption) WatchChan
 
 	// Close closes the watcher and cancels all watch requests.
@@ -214,16 +214,15 @@ func (w *watcher) newWatcherGrpcStream(inctx context.Context) *watchGrpcStream {
 		owner:      w,
 		remote:     w.remote,
 		ctx:        ctx,
-		ctxKey:     fmt.Sprintf("%v", inctx),
+		ctxKey:     streamKeyFromCtx(inctx),
 		cancel:     cancel,
 		substreams: make(map[int64]*watcherStream),
-
-		respc:    make(chan *pb.WatchResponse),
-		reqc:     make(chan *watchRequest),
-		donec:    make(chan struct{}),
-		errc:     make(chan error, 1),
-		closingc: make(chan *watcherStream),
-		resumec:  make(chan struct{}),
+		respc:      make(chan *pb.WatchResponse),
+		reqc:       make(chan *watchRequest),
+		donec:      make(chan struct{}),
+		errc:       make(chan error, 1),
+		closingc:   make(chan *watcherStream),
+		resumec:    make(chan struct{}),
 	}
 	go wgs.run()
 	return wgs
@@ -254,7 +253,7 @@ func (w *watcher) Watch(ctx context.Context, key string, opts ...OpOption) Watch
 	}
 
 	ok := false
-	ctxKey := fmt.Sprintf("%v", ctx)
+	ctxKey := streamKeyFromCtx(ctx)
 
 	// find or allocate appropriate grpc watch stream
 	w.mu.Lock()
@@ -317,14 +316,14 @@ func (w *watcher) Close() (err error) {
 	w.streams = nil
 	w.mu.Unlock()
 	for _, wgs := range streams {
-		if werr := wgs.Close(); werr != nil {
+		if werr := wgs.close(); werr != nil {
 			err = werr
 		}
 	}
 	return err
 }
 
-func (w *watchGrpcStream) Close() (err error) {
+func (w *watchGrpcStream) close() (err error) {
 	w.cancel()
 	<-w.donec
 	select {
@@ -462,7 +461,7 @@ func (w *watchGrpcStream) run() {
 				if ws := w.nextResume(); ws != nil {
 					wc.Send(ws.initReq.toPB())
 				}
-			case pbresp.Canceled:
+			case pbresp.Canceled && pbresp.CompactRevision == 0:
 				delete(cancelSet, pbresp.WatchId)
 				if ws, ok := w.substreams[pbresp.WatchId]; ok {
 					// signal to stream goroutine to update closingc
@@ -794,4 +793,11 @@ func (wr *watchRequest) toPB() *pb.WatchRequest {
 	}
 	cr := &pb.WatchRequest_CreateRequest{CreateRequest: req}
 	return &pb.WatchRequest{RequestUnion: cr}
+}
+
+func streamKeyFromCtx(ctx context.Context) string {
+	if md, ok := metadata.FromOutgoingContext(ctx); ok {
+		return fmt.Sprintf("%+v", md)
+	}
+	return ""
 }

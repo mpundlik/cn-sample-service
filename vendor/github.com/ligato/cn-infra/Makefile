@@ -62,6 +62,14 @@ define lint_only
     @echo "# done"
 endef
 
+# verify that links in markdown files are valid
+# requires npm install -g markdown-link-check
+define check_links_only
+    @echo "# checking links"
+    @./scripts/check_links.sh
+    @echo "# done"
+endef
+
 # build plugin example only
 define build_plugin_examples_only
     @echo "# building plugin examples"
@@ -107,6 +115,13 @@ define clean_plugin_examples_only
     @echo "# done"
 endef
 
+# run code formatter
+define format_only
+    @echo "# formatting the code"
+    @./scripts/gofmt.sh
+    @echo "# done"
+endef
+
 # build all binaries
 build:
 	$(call build_examples_only)
@@ -140,6 +155,14 @@ test-cover-xml:
 lint:
 	$(call lint_only)
 
+# validate links in markdown files
+check_links:
+	$(call check_links_only)
+
+# format the code
+format:
+	$(call format_only)
+
 
 # clean
 clean:
@@ -152,4 +175,4 @@ all:
 	$(call test_only)
 	$(call install_only)
 
-.PHONY: build update-dep install-dep test lint clean
+.PHONY: build update-dep install-dep test lint check_links clean
