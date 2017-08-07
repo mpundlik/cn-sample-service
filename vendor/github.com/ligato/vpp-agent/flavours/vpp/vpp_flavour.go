@@ -45,12 +45,16 @@ func (f *Flavour) Inject() error {
 	f.StatusCheck.HTTP = &f.HTTP
 	f.Etcd.LogFactory = &f.Logrus
 	f.Etcd.ServiceLabel = &f.ServiceLabel
+	f.Etcd.StatusCheck = &f.StatusCheck
 	f.Kafka.LogFactory = &f.Logrus
 	f.Kafka.ServiceLabel = &f.ServiceLabel
+	f.Kafka.StatusCheck = &f.StatusCheck
 	f.GoVPP.StatusCheck = &f.StatusCheck
 	f.GoVPP.LogFactory = &f.Logrus
 	f.VPP.ServiceLabel = &f.ServiceLabel
 	f.VPP.Kafka = &f.Kafka
+	f.VPP.GoVppmux = &f.GoVPP
+	f.VPP.Linux = &f.Linux
 
 	return nil
 }

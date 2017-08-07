@@ -47,7 +47,7 @@ message ResponseHeader {
 
 An application may read the Cluster_ID (Member_ID) field to ensure it is communicating with the intended cluster (member).
 
-Applications can use the `Revision` to know the latest revision of the key-value store. This is especially useful when applications specify a historical revision to make time `travel query` and wishes to know the latest revision at the time of the request.
+Applications can use the `Revision` to know the latest revision of the key-value store. This is especially useful when applications specify a historical revision to make time `travel query` and wish to know the latest revision at the time of the request.
 
 Applications can use `Raft_Term` to detect when the cluster completes a new leader election.
 
@@ -449,7 +449,7 @@ message LeaseRevokeRequest {
 
 ### Keep alives
 
-Leases are refreshed using a bi-directional stream created with the `LeaseKeepAlive` API call. When the client wishes to refresh a lease, it sends a `LeaseGrantRequest` over the stream:
+Leases are refreshed using a bi-directional stream created with the `LeaseKeepAlive` API call. When the client wishes to refresh a lease, it sends a `LeaseKeepAliveRequest` over the stream:
 
 ```protobuf
 message LeaseKeepAliveRequest {

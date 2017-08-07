@@ -55,7 +55,7 @@ func NewConsumerFromClient(client *Client, groupID string, topics []string) (*Co
 
 		errors:        make(chan error, client.config.ChannelBufferSize),
 		messages:      make(chan *sarama.ConsumerMessage),
-		notifications: make(chan *Notification, 1),
+		notifications: make(chan *Notification),
 	}
 	if err := c.client.RefreshCoordinator(groupID); err != nil {
 		return nil, err
@@ -261,6 +261,12 @@ func (c *Consumer) mainLoop() {
 			continue
 		}
 
+		// Update/issue notification with new claims
+		if c.client.config.Group.Return.Notifications {
+			notification.claim(subs)
+			c.handleNotification(notification)
+		}
+
 		// Start topic watcher loop
 		twStop, twDone := make(chan none), make(chan none)
 		go c.twLoop(twStop, twDone)
@@ -269,12 +275,6 @@ func (c *Consumer) mainLoop() {
 		cmStop, cmDone := make(chan none), make(chan none)
 		go c.cmLoop(cmStop, cmDone)
 		atomic.StoreInt32(&c.consuming, 1)
-
-		// Update notification with new claims
-		if c.client.config.Group.Return.Notifications {
-			notification.claim(subs)
-			c.notifications <- notification
-		}
 
 		// Wait for signals
 		select {
@@ -378,10 +378,8 @@ func (c *Consumer) cmLoop(stop <-chan none, done chan<- none) {
 	}
 }
 
-func (c *Consumer) rebalanceError(err error, notification *Notification) {
-	if c.client.config.Group.Return.Notifications {
-		c.notifications <- notification
-	}
+func (c *Consumer) rebalanceError(err error, n *Notification) {
+	c.handleNotification(n)
 
 	switch err {
 	case sarama.ErrRebalanceInProgress:
@@ -392,6 +390,16 @@ func (c *Consumer) rebalanceError(err error, notification *Notification) {
 	select {
 	case <-c.dying:
 	case <-time.After(c.client.config.Metadata.Retry.Backoff):
+	}
+}
+
+func (c *Consumer) handleNotification(n *Notification) {
+	if n != nil && c.client.config.Group.Return.Notifications {
+		select {
+		case c.notifications <- n:
+		case <-c.dying:
+			return
+		}
 	}
 }
 
@@ -416,7 +424,10 @@ func (c *Consumer) release() (err error) {
 	defer c.subs.Clear()
 
 	// Wait for messages to be processed
-	time.Sleep(c.client.config.Consumer.MaxProcessingTime)
+	select {
+	case <-c.dying:
+	case <-time.After(c.client.config.Group.Offsets.Synchronization.DwellTime):
+	}
 
 	// Commit offsets, continue on errors
 	if e := c.commitOffsetsWithRetry(c.client.config.Group.Offsets.Retry.Max); e != nil {
@@ -659,7 +670,16 @@ func (c *Consumer) fetchOffsets(subs map[string][]int32) (map[string]map[int32]o
 	}
 
 	// Wait for other cluster consumers to process, release and commit
-	time.Sleep(c.client.config.Consumer.MaxProcessingTime * 2)
+	// Times-two so that we are less likely to "win" a race against a sarama-cluster client that is:
+	// 1) losing a topic-partition in a rebalance, and therefore:
+	// 2) sleeping to allow some processing to complete, before:
+	// 3) committing the offsets.
+	// Note that this doesn't necessarily account for the end-to-end latency of the Kafka offsets topic.
+	select {
+	case <-c.dying:
+		return nil, sarama.ErrClosedClient
+	case <-time.After(c.client.config.Group.Offsets.Synchronization.DwellTime * 2):
+	}
 
 	broker, err := c.client.Coordinator(c.groupID)
 	if err != nil {

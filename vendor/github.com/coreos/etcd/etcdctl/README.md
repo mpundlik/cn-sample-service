@@ -223,12 +223,13 @@ RPC: Txn
 #### Input Format
 ```ebnf
 <Txn> ::= <CMP>* "\n" <THEN> "\n" <ELSE> "\n"
-<CMP> ::= (<CMPCREATE>|<CMPMOD>|<CMPVAL>|<CMPVER>) "\n"
+<CMP> ::= (<CMPCREATE>|<CMPMOD>|<CMPVAL>|<CMPVER>|<CMPLEASE>) "\n"
 <CMPOP> ::= "<" | "=" | ">"
 <CMPCREATE> := ("c"|"create")"("<KEY>")" <REVISION>
 <CMPMOD> ::= ("m"|"mod")"("<KEY>")" <CMPOP> <REVISION>
 <CMPVAL> ::= ("val"|"value")"("<KEY>")" <CMPOP> <VALUE>
 <CMPVER> ::= ("ver"|"version")"("<KEY>")" <CMPOP> <VERSION>
+<CMPLEASE> ::= "lease("<KEY>")" <CMPOP> <LEASE>
 <THEN> ::= <OP>*
 <ELSE> ::= <OP>*
 <OP> ::= ((see put, get, del etcdctl command syntax)) "\n"
@@ -236,6 +237,7 @@ RPC: Txn
 <VALUE> ::= (%q formatted string)
 <REVISION> ::= "\""[0-9]+"\""
 <VERSION> ::= "\""[0-9]+"\""
+<LEASE> ::= "\""[0-9]+\""
 ```
 
 #### Output
@@ -565,6 +567,10 @@ Prints a humanized table of the member IDs, statuses, names, peer addresses, and
 
 ENDPOINT provides commands for querying individual endpoints.
 
+#### Options
+
+- cluster -- fetch and use all endpoints from the etcd cluster member list
+
 ### ENDPOINT HEALTH
 
 ENDPOINT HEALTH checks the health of the list of endpoints with respect to cluster. An endpoint is unhealthy
@@ -576,11 +582,20 @@ If an endpoint can participate in consensus, prints a message indicating the end
 
 #### Example
 
+Check the default endpoint's health:
+
 ```bash
 ./etcdctl endpoint health
-# 127.0.0.1:32379 is healthy: successfully committed proposal: took = 2.130877ms
 # 127.0.0.1:2379 is healthy: successfully committed proposal: took = 2.095242ms
-# 127.0.0.1:22379 is healthy: successfully committed proposal: took = 2.083263ms
+```
+
+Check all endpoints for the cluster associated with the default endpoint:
+
+```bash
+./etcdctl endpoint --cluster health
+# http://127.0.0.1:2379 is healthy: successfully committed proposal: took = 1.060091ms
+# http://127.0.0.1:22379 is healthy: successfully committed proposal: took = 903.138µs
+# http://127.0.0.1:32379 is healthy: successfully committed proposal: took = 1.113848ms
 ```
 
 ### ENDPOINT STATUS
@@ -599,27 +614,31 @@ Prints a line of JSON encoding each endpoint URL, ID, version, database size, le
 
 #### Examples
 
+Get the status for the default endpoint:
+
 ```bash
 ./etcdctl endpoint status
 # 127.0.0.1:2379, 8211f1d0f64f3269, 3.0.0, 25 kB, false, 2, 63
-# 127.0.0.1:22379, 91bc3c398fb3c146, 3.0.0, 25 kB, false, 2, 63
-# 127.0.0.1:32379, fd422379fda50e48, 3.0.0, 25 kB, true, 2, 63
 ```
+
+Get the status for the default endpoint as JSON:
 
 ```bash
 ./etcdctl -w json endpoint status
-# [{"Endpoint":"127.0.0.1:2379","Status":{"header":{"cluster_id":17237436991929493444,"member_id":9372538179322589801,"revision":2,"raft_term":2},"version":"3.0.0","dbSize":24576,"leader":18249187646912138824,"raftIndex":32623,"raftTerm":2}},{"Endpoint":"127.0.0.1:22379","Status":{"header":{"cluster_id":17237436991929493444,"member_id":10501334649042878790,"revision":2,"raft_term":2},"version":"3.0.0","dbSize":24576,"leader":18249187646912138824,"raftIndex":32623,"raftTerm":2}},{"Endpoint":"127.0.0.1:32379","Status":{"header":{"cluster_id":17237436991929493444,"member_id":18249187646912138824,"revision":2,"raft_term":2},"version":"3.0.0","dbSize":24576,"leader":18249187646912138824,"raftIndex":32623,"raftTerm":2}}]
+# [{"Endpoint":"127.0.0.1:2379","Status":{"header":{"cluster_id":17237436991929493444,"member_id":9372538179322589801,"revision":2,"raft_term":2},"version":"3.0.0","dbSize":24576,"leader":18249187646912138824,"raftIndex":32623,"raftTerm":2}}]
 ```
 
+Get the status for all endpoints in the cluster associated with the default endpoint:
+
 ```bash
-./etcdctl -w table endpoint status
-+-----------------+------------------+---------+---------+-----------+-----------+------------+
-|    ENDPOINT     |        ID        | VERSION | DB SIZE | IS LEADER | RAFT TERM | RAFT INDEX |
-+-----------------+------------------+---------+---------+-----------+-----------+------------+
-| 127.0.0.1:2379  | 8211f1d0f64f3269 |  3.0.0  | 25 kB   | false     |         2 |         52 |
-| 127.0.0.1:22379 | 91bc3c398fb3c146 |  3.0.0  | 25 kB   | false     |         2 |         52 |
-| 127.0.0.1:32379 | fd422379fda50e48 |  3.0.0  | 25 kB   | true      |         2 |         52 |
-+-----------------+------------------+---------+---------+-----------+-----------+------------+
+./etcdctl -w table endpoint --cluster status
++------------------------+------------------+----------------+---------+-----------+-----------+------------+
+|        ENDPOINT        |        ID        |    VERSION     | DB SIZE | IS LEADER | RAFT TERM | RAFT INDEX |
++------------------------+------------------+----------------+---------+-----------+-----------+------------+
+| http://127.0.0.1:2379  | 8211f1d0f64f3269 | 3.2.0-rc.1+git |   25 kB |     false |         2 |          8 |
+| http://127.0.0.1:22379 | 91bc3c398fb3c146 | 3.2.0-rc.1+git |   25 kB |     false |         2 |          8 |
+| http://127.0.0.1:32379 | fd422379fda50e48 | 3.2.0-rc.1+git |   25 kB |      true |         2 |          8 |
++------------------------+------------------+----------------+---------+-----------+-----------+------------+
 ```
 
 ### ALARM \<subcommand\>
@@ -786,6 +805,29 @@ Prints a line of JSON encoding the database hash, revision, total keys, and size
 +----------+----------+------------+------------+
 | cf1550fb |        3 |          3 | 25 kB      |
 +----------+----------+------------+------------+
+```
+
+### MOVE-LEADER \<hexadecimal-transferee-id\>
+
+MOVE-LEADER transfers leadership from the leader to another member in the cluster.
+
+#### Example
+
+```bash
+# to choose transferee
+transferee_id=$(./etcdctl \
+  --endpoints localhost:12379,localhost:22379,localhost:32379 \
+  endpoint status | grep -m 1 "false" | awk -F', ' '{print $2}')
+echo ${transferee_id}
+# c89feb932daef420
+
+# endpoints should include leader node
+./etcdctl --endpoints ${transferee_ep} move-leader ${transferee_id}
+# Error:  no leader endpoint given at [localhost:22379 localhost:32379]
+
+# request to leader with target node ID
+./etcdctl --endpoints ${leader_ep} move-leader ${transferee_id}
+# Leadership transferred from 45ddc0e800e20b93 to c89feb932daef420
 ```
 
 ## Concurrency commands

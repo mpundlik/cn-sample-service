@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -51,11 +52,9 @@ type Client struct {
 	conn     *grpc.ClientConn
 	dialerrc chan error
 
-	cfg              Config
-	creds            *credentials.TransportCredentials
-	balancer         *simpleBalancer
-	retryWrapper     retryRpcFunc
-	retryAuthWrapper retryRpcFunc
+	cfg      Config
+	creds    *credentials.TransportCredentials
+	balancer *simpleBalancer
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -215,6 +214,16 @@ func (c *Client) dialSetupOpts(endpoint string, dopts ...grpc.DialOption) (opts 
 	if c.cfg.DialTimeout > 0 {
 		opts = []grpc.DialOption{grpc.WithTimeout(c.cfg.DialTimeout)}
 	}
+	if c.cfg.DialKeepAliveTime > 0 {
+		params := keepalive.ClientParameters{
+			Time: c.cfg.DialKeepAliveTime,
+		}
+		// Only relevant when KeepAliveTime is non-zero
+		if c.cfg.DialKeepAliveTimeout > 0 {
+			params.Timeout = c.cfg.DialKeepAliveTimeout
+		}
+		opts = append(opts, grpc.WithKeepaliveParams(params))
+	}
 	opts = append(opts, dopts...)
 
 	f := func(host string, t time.Duration) (net.Conn, error) {
@@ -333,7 +342,7 @@ func (c *Client) dial(endpoint string, dopts ...grpc.DialOption) (*grpc.ClientCo
 // when the cluster has a leader.
 func WithRequireLeader(ctx context.Context) context.Context {
 	md := metadata.Pairs(rpctypes.MetadataRequireLeaderKey, rpctypes.MetadataHasLeader)
-	return metadata.NewContext(ctx, md)
+	return metadata.NewOutgoingContext(ctx, md)
 }
 
 func newClient(cfg *Config) (*Client, error) {
@@ -376,8 +385,6 @@ func newClient(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 	client.conn = conn
-	client.retryWrapper = client.newRetryWrapper()
-	client.retryAuthWrapper = client.newAuthRetryWrapper()
 
 	// wait for a connection
 	if cfg.DialTimeout > 0 {
@@ -499,7 +506,6 @@ func toErr(ctx context.Context, err error) error {
 			err = ctx.Err()
 		}
 	case codes.Unavailable:
-		err = ErrNoAvailableEndpoints
 	case codes.FailedPrecondition:
 		err = grpc.ErrClientConnClosing
 	}

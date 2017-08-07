@@ -17,9 +17,12 @@ package mvcc
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	"math"
+	mrand "math/rand"
 	"os"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -215,9 +218,10 @@ func TestStoreRange(t *testing.T) {
 			t.Errorf("#%d: rev = %d, want %d", i, ret.Rev, wrev)
 		}
 
-		wstart, wend := revBytesRange(tt.idxr.revs[0])
+		wstart := newRevBytes()
+		revToBytes(tt.idxr.revs[0], wstart)
 		wact := []testutil.Action{
-			{"range", []interface{}{keyBucketName, wstart, wend, int64(0)}},
+			{"range", []interface{}{keyBucketName, wstart, []byte(nil), int64(0)}},
 		}
 		if g := b.tx.Action(); !reflect.DeepEqual(g, wact) {
 			t.Errorf("#%d: tx action = %+v, want %+v", i, g, wact)
@@ -401,10 +405,61 @@ func TestStoreRestore(t *testing.T) {
 	}
 	ki := &keyIndex{key: []byte("foo"), modified: revision{5, 0}, generations: gens}
 	wact = []testutil.Action{
+		{"keyIndex", []interface{}{ki}},
 		{"insert", []interface{}{ki}},
 	}
 	if g := fi.Action(); !reflect.DeepEqual(g, wact) {
 		t.Errorf("index action = %+v, want %+v", g, wact)
+	}
+}
+
+func TestRestoreDelete(t *testing.T) {
+	oldChunk := restoreChunkKeys
+	restoreChunkKeys = mrand.Intn(3) + 2
+	defer func() { restoreChunkKeys = oldChunk }()
+
+	b, tmpPath := backend.NewDefaultTmpBackend()
+	s := NewStore(b, &lease.FakeLessor{}, nil)
+	defer os.Remove(tmpPath)
+
+	keys := make(map[string]struct{})
+	for i := 0; i < 20; i++ {
+		ks := fmt.Sprintf("foo-%d", i)
+		k := []byte(ks)
+		s.Put(k, []byte("bar"), lease.NoLease)
+		keys[ks] = struct{}{}
+		switch mrand.Intn(3) {
+		case 0:
+			// put random key from past via random range on map
+			ks = fmt.Sprintf("foo-%d", mrand.Intn(i+1))
+			s.Put([]byte(ks), []byte("baz"), lease.NoLease)
+			keys[ks] = struct{}{}
+		case 1:
+			// delete random key via random range on map
+			for k := range keys {
+				s.DeleteRange([]byte(k), nil)
+				delete(keys, k)
+				break
+			}
+		}
+	}
+	s.Close()
+
+	s = NewStore(b, &lease.FakeLessor{}, nil)
+	defer s.Close()
+	for i := 0; i < 20; i++ {
+		ks := fmt.Sprintf("foo-%d", i)
+		r, err := s.Range([]byte(ks), nil, RangeOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := keys[ks]; ok {
+			if len(r.KVs) == 0 {
+				t.Errorf("#%d: expected %q, got deleted", i, ks)
+			}
+		} else if len(r.KVs) != 0 {
+			t.Errorf("#%d: expected deleted, got %q", i, ks)
+		}
 	}
 }
 
@@ -454,6 +509,78 @@ func TestRestoreContinueUnfinishedCompaction(t *testing.T) {
 	}
 
 	t.Errorf("key for rev %+v still exists, want deleted", bytesToRev(revbytes))
+}
+
+type hashKVResult struct {
+	hash       uint32
+	compactRev int64
+}
+
+// TestHashKVWhenCompacting ensures that HashKV returns correct hash when compacting.
+func TestHashKVWhenCompacting(t *testing.T) {
+	b, tmpPath := backend.NewDefaultTmpBackend()
+	s := NewStore(b, &lease.FakeLessor{}, nil)
+	defer os.Remove(tmpPath)
+
+	rev := 10000
+	for i := 2; i <= rev; i++ {
+		s.Put([]byte("foo"), []byte(fmt.Sprintf("bar%d", i)), lease.NoLease)
+	}
+
+	hashCompactc := make(chan hashKVResult, 1)
+
+	donec := make(chan struct{})
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				hash, _, compactRev, err := s.HashByRev(int64(rev))
+				if err != nil {
+					t.Fatal(err)
+				}
+				select {
+				case <-donec:
+					return
+				case hashCompactc <- hashKVResult{hash, compactRev}:
+				}
+			}
+		}()
+	}
+
+	go func() {
+		defer close(donec)
+		revHash := make(map[int64]uint32)
+		for round := 0; round < 1000; round++ {
+			r := <-hashCompactc
+			if revHash[r.compactRev] == 0 {
+				revHash[r.compactRev] = r.hash
+			}
+			if r.hash != revHash[r.compactRev] {
+				t.Fatalf("Hashes differ (current %v) != (saved %v)", r.hash, revHash[r.compactRev])
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 100; i >= 0; i-- {
+			_, err := s.Compact(int64(rev - 1 - i))
+			if err != nil {
+				t.Fatal(err)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}()
+
+	select {
+	case <-donec:
+		wg.Wait()
+	case <-time.After(10 * time.Second):
+		testutil.FatalStack(t, "timeout")
+	}
 }
 
 func TestTxnPut(t *testing.T) {
@@ -640,10 +767,19 @@ func (i *fakeIndex) Compact(rev int64) map[revision]struct{} {
 	i.Recorder.Record(testutil.Action{Name: "compact", Params: []interface{}{rev}})
 	return <-i.indexCompactRespc
 }
+func (i *fakeIndex) Keep(rev int64) map[revision]struct{} {
+	i.Recorder.Record(testutil.Action{Name: "keep", Params: []interface{}{rev}})
+	return <-i.indexCompactRespc
+}
 func (i *fakeIndex) Equal(b index) bool { return false }
 
 func (i *fakeIndex) Insert(ki *keyIndex) {
 	i.Recorder.Record(testutil.Action{Name: "insert", Params: []interface{}{ki}})
+}
+
+func (i *fakeIndex) KeyIndex(ki *keyIndex) *keyIndex {
+	i.Recorder.Record(testutil.Action{Name: "keyIndex", Params: []interface{}{ki}})
+	return nil
 }
 
 func createBytesSlice(bytesN, sliceN int) [][]byte {

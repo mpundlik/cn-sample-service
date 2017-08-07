@@ -19,11 +19,11 @@ import (
 	"github.com/ligato/cn-infra/logging"
 	"github.com/ligato/cn-infra/logging/logroot"
 	log "github.com/ligato/cn-infra/logging/logrus"
+	"github.com/ligato/vpp-agent/idxvpp/nametoidx"
+	"github.com/ligato/vpp-agent/idxvpp/persist"
 	"github.com/ligato/vpp-agent/plugins/defaultplugins/ifplugin/model/bfd"
 	intf "github.com/ligato/vpp-agent/plugins/defaultplugins/ifplugin/model/interfaces"
 	"github.com/ligato/vpp-agent/plugins/defaultplugins/ifplugin/vppdump"
-	"github.com/ligato/vpp-agent/idxvpp/nametoidx"
-	"github.com/ligato/vpp-agent/idxvpp/persist"
 )
 
 // Resync writes interfaces to the empty VPP
@@ -104,8 +104,10 @@ func (plugin *InterfaceConfigurator) Resync(nbIfaces []*intf.Interfaces_Interfac
 			if err != nil {
 				wasError = err
 			}
-			// even if error occurred (because there is still swIfIndex)
-			plugin.swIfIndexes.RegisterName(nbIface.Name, swIfIdx, nbIface)
+			if !plugin.afPacketConfigurator.IsPendingAfPacket(nbIface) {
+				// even if error occurred (because there is still swIfIndex)
+				plugin.swIfIndexes.RegisterName(nbIface.Name, swIfIdx, nbIface)
+			}
 		} else {
 			toBeConfigured = append(toBeConfigured, nbIface)
 		}

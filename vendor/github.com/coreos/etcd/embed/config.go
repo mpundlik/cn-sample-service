@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/coreos/etcd/etcdserver"
@@ -37,9 +38,11 @@ const (
 	ClusterStateFlagNew      = "new"
 	ClusterStateFlagExisting = "existing"
 
-	DefaultName         = "default"
-	DefaultMaxSnapshots = 5
-	DefaultMaxWALs      = 5
+	DefaultName            = "default"
+	DefaultMaxSnapshots    = 5
+	DefaultMaxWALs         = 5
+	DefaultMaxTxnOps       = uint(128)
+	DefaultMaxRequestBytes = 1.5 * 1024 * 1024
 
 	DefaultListenPeerURLs   = "http://localhost:2380"
 	DefaultListenClientURLs = "http://localhost:2379"
@@ -78,6 +81,7 @@ type Config struct {
 	Name                    string `json:"name"`
 	SnapCount               uint64 `json:"snapshot-count"`
 	AutoCompactionRetention int    `json:"auto-compaction-retention"`
+	AutoCompactionMode      string `json:"auto-compaction-mode"`
 
 	// TickMs is the number of milliseconds between heartbeat ticks.
 	// TODO: decouple tickMs and heartbeat tick (current heartbeat tick = 1).
@@ -85,6 +89,8 @@ type Config struct {
 	TickMs            uint  `json:"heartbeat-interval"`
 	ElectionMs        uint  `json:"election-timeout"`
 	QuotaBackendBytes int64 `json:"quota-backend-bytes"`
+	MaxTxnOps         uint  `json:"max-txn-ops"`
+	MaxRequestBytes   uint  `json:"max-request-bytes"`
 
 	// clustering
 
@@ -107,10 +113,12 @@ type Config struct {
 
 	// debug
 
-	Debug        bool   `json:"debug"`
-	LogPkgLevels string `json:"log-package-levels"`
-	EnablePprof  bool
-	Metrics      string `json:"metrics"`
+	Debug                 bool   `json:"debug"`
+	LogPkgLevels          string `json:"log-package-levels"`
+	EnablePprof           bool
+	Metrics               string `json:"metrics"`
+	ListenMetricsUrls     []url.URL
+	ListenMetricsUrlsJSON string `json:"listen-metrics-urls"`
 
 	// ForceNewCluster starts a new cluster even if previously started; unsafe.
 	ForceNewCluster bool `json:"force-new-cluster"`
@@ -172,6 +180,8 @@ func NewConfig() *Config {
 		MaxWalFiles:         DefaultMaxWALs,
 		Name:                DefaultName,
 		SnapCount:           etcdserver.DefaultSnapCount,
+		MaxTxnOps:           DefaultMaxTxnOps,
+		MaxRequestBytes:     DefaultMaxRequestBytes,
 		TickMs:              100,
 		ElectionMs:          1000,
 		LPUrls:              []url.URL{*lpurl},
@@ -248,6 +258,14 @@ func (cfg *configYAML) configFromFile(path string) error {
 		cfg.ACUrls = []url.URL(u)
 	}
 
+	if cfg.ListenMetricsUrlsJSON != "" {
+		u, err := types.NewURLs(strings.Split(cfg.ListenMetricsUrlsJSON, ","))
+		if err != nil {
+			plog.Fatalf("unexpected error setting up listen-metrics-urls: %v", err)
+		}
+		cfg.ListenMetricsUrls = []url.URL(u)
+	}
+
 	// If a discovery flag is set, clear default initial cluster set by InitialClusterFromName
 	if (cfg.Durl != "" || cfg.DNSCluster != "") && cfg.InitialCluster == defaultInitialCluster {
 		cfg.InitialCluster = ""
@@ -276,6 +294,9 @@ func (cfg *Config) Validate() error {
 		return err
 	}
 	if err := checkBindURLs(cfg.LCUrls); err != nil {
+		return err
+	}
+	if err := checkBindURLs(cfg.ListenMetricsUrls); err != nil {
 		return err
 	}
 
@@ -371,6 +392,34 @@ func (cfg Config) defaultPeerHost() bool {
 
 func (cfg Config) defaultClientHost() bool {
 	return len(cfg.ACUrls) == 1 && cfg.ACUrls[0].String() == DefaultAdvertiseClientURLs
+}
+
+func (cfg *Config) ClientSelfCert() (err error) {
+	if cfg.ClientAutoTLS && cfg.ClientTLSInfo.Empty() {
+		chosts := make([]string, len(cfg.LCUrls))
+		for i, u := range cfg.LCUrls {
+			chosts[i] = u.Host
+		}
+		cfg.ClientTLSInfo, err = transport.SelfCert(filepath.Join(cfg.Dir, "fixtures", "client"), chosts)
+		return err
+	} else if cfg.ClientAutoTLS {
+		plog.Warningf("ignoring client auto TLS since certs given")
+	}
+	return nil
+}
+
+func (cfg *Config) PeerSelfCert() (err error) {
+	if cfg.PeerAutoTLS && cfg.PeerTLSInfo.Empty() {
+		phosts := make([]string, len(cfg.LPUrls))
+		for i, u := range cfg.LPUrls {
+			phosts[i] = u.Host
+		}
+		cfg.PeerTLSInfo, err = transport.SelfCert(filepath.Join(cfg.Dir, "fixtures", "peer"), phosts)
+		return err
+	} else if cfg.PeerAutoTLS {
+		plog.Warningf("ignoring peer auto TLS since certs given")
+	}
+	return nil
 }
 
 // UpdateDefaultClusterFromName updates cluster advertise URLs with, if available, default host,

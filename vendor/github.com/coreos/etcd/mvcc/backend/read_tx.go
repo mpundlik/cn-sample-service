@@ -19,7 +19,7 @@ import (
 	"math"
 	"sync"
 
-	"github.com/boltdb/bolt"
+	bolt "github.com/coreos/bbolt"
 )
 
 // safeRangeBucket is a hack to avoid inadvertently reading duplicate keys;
@@ -63,30 +63,31 @@ func (rt *readTx) UnsafeRange(bucketName, key, endKey []byte, limit int64) ([][]
 	if int64(len(keys)) == limit {
 		return keys, vals
 	}
-	rt.txmu.Lock()
 	// ignore error since bucket may have been created in this batch
-	k2, v2, _ := unsafeRange(rt.tx, bucketName, key, endKey, limit-int64(len(keys)))
-	rt.txmu.Unlock()
+	k2, v2, _ := unsafeRange(rt.tx, bucketName, key, endKey, limit-int64(len(keys)), &rt.txmu)
 	return append(k2, keys...), append(v2, vals...)
 }
 
 func (rt *readTx) UnsafeForEach(bucketName []byte, visitor func(k, v []byte) error) error {
 	dups := make(map[string]struct{})
-	f1 := func(k, v []byte) error {
+	getDups := func(k, v []byte) error {
 		dups[string(k)] = struct{}{}
-		return visitor(k, v)
+		return nil
 	}
-	f2 := func(k, v []byte) error {
+	visitNoDup := func(k, v []byte) error {
 		if _, ok := dups[string(k)]; ok {
 			return nil
 		}
 		return visitor(k, v)
 	}
-	if err := rt.buf.ForEach(bucketName, f1); err != nil {
+	if err := rt.buf.ForEach(bucketName, getDups); err != nil {
 		return err
 	}
 	rt.txmu.Lock()
-	err := unsafeForEach(rt.tx, bucketName, f2)
+	err := unsafeForEach(rt.tx, bucketName, visitNoDup)
 	rt.txmu.Unlock()
-	return err
+	if err != nil {
+		return err
+	}
+	return rt.buf.ForEach(bucketName, visitor)
 }
