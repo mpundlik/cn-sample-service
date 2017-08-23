@@ -43,7 +43,7 @@ type HelloWorldPlugin struct {
 
 // Init is called on plugin startup. New logger is instantiated.
 func (plugin *HelloWorldPlugin) Init() (err error) {
-	logroot.StandardLogger().Info("HelloWorldPlugin initialized")
+	logroot.StandardLogger().Info("HelloWorldPlugin initialized.")
 	return nil
 }
 
