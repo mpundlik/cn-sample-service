@@ -1,0 +1,67 @@
+// Copyright (c) 2017 Cisco and/or its affiliates.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at:
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package etcdkafka
+
+import (
+	"github.com/ligato/cn-infra/core"
+	"github.com/ligato/cn-infra/datasync/kvdbsync"
+	"github.com/ligato/cn-infra/db/keyval/etcdv3"
+	"github.com/ligato/cn-infra/flavors/rpc"
+	"github.com/ligato/cn-infra/messaging/kafka"
+)
+
+// FlavorRPC glues together generic.FlavorRPC plugins with:
+// - ETCD (useful for watching config.)
+// - Kafka plugins (useful for publishing events)
+type Flavor struct {
+	rpc.FlavorRPC
+
+	ETCD         etcdv3.Plugin
+	ETCDDataSync kvdbsync.Plugin
+
+	Kafka kafka.Plugin
+
+	injected bool
+}
+
+// Inject sets object references
+func (f *Flavor) Inject() error {
+	if f.injected {
+		return nil
+	} else {
+		f.injected = true
+	}
+
+	f.FlavorRPC.Inject()
+
+	f.ETCD.Log = f.LoggerFor("ETCD")
+	f.ETCD.ServiceLabel = &f.ServiceLabel
+	f.ETCD.StatusCheck = &f.StatusCheck
+	f.ETCDDataSync.KvPlugin = &f.ETCD
+	f.ETCDDataSync.ServiceLabel = &f.ServiceLabel
+	f.StatusCheck.Transport = &f.ETCDDataSync
+
+	f.Kafka.Log = f.LoggerFor("Kafka")
+	f.Kafka.ServiceLabel = &f.ServiceLabel
+	f.Kafka.StatusCheck = &f.StatusCheck
+
+	return nil
+}
+
+// Plugins combines all Plugins in flavor to the list
+func (f *Flavor) Plugins() []*core.NamedPlugin {
+	f.Inject()
+	return core.ListPluginsInFlavor(f)
+}
