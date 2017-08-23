@@ -16,24 +16,20 @@ package main
 
 import (
 	"github.com/ligato/cn-infra/core"
-	"github.com/ligato/cn-infra/logging"
+	"github.com/ligato/cn-infra/flavors/local"
 	"github.com/ligato/cn-infra/logging/logroot"
-	"github.com/ligato/vpp-agent/flavours/vpp"
 	"time"
 )
 
 func main() {
 	// leverage an existing flavour - set of plugins
-	f := vpp.Flavour{}
+	f := local.FlavorLocal{}
 
 	// create an instance of the plugin
 	hwPlugin := HelloWorldPlugin{}
 
-	// wire the dependencies
-	hwPlugin.LogFactory = &f.Logrus
-
 	// Create new agent
-	agent := core.NewAgent(logroot.Logger(), 15*time.Second, append(f.Plugins(), &core.NamedPlugin{PluginName: PluginID, Plugin: &hwPlugin})...)
+	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(f.Plugins(), &core.NamedPlugin{PluginName: PluginID, Plugin: &hwPlugin})...)
 
 	core.EventLoopWithInterrupt(agent, nil)
 }
@@ -43,21 +39,17 @@ const PluginID core.PluginName = "helloworld-plugin"
 
 // HelloWorldPlugin is a plugin that showcase the extensibility of vpp agent.
 type HelloWorldPlugin struct {
-	// LogFactory is a dependency of the plugin that needs to be injected.
-	LogFactory logging.LogFactory
-
-	logging.Logger
 }
 
 // Init is called on plugin startup. New logger is instantiated.
 func (plugin *HelloWorldPlugin) Init() (err error) {
-	plugin.Logger, err = plugin.LogFactory.NewLogger(string(PluginID))
-	return err
+	logroot.StandardLogger().Info("HelloWorldPlugin initialized")
+	return nil
 }
 
 // AfterInit logs a sample message.
 func (plugin *HelloWorldPlugin) AfterInit() error {
-	plugin.Info("Hello World!!!")
+	logroot.StandardLogger().Info("Hello World!!!")
 	return nil
 }
 

@@ -1,4 +1,4 @@
-include vendor/github.com/ligato/vpp-agent/Makeroutines.mk
+include Makeroutines.mk
 
 VERSION=$(shell git rev-parse HEAD)
 DATE=$(shell date +'%Y-%m-%dT%H:%M%:z')
@@ -19,6 +19,13 @@ define build_helloworld_only
     @echo "# done"
 endef
 
+# build cassandra only
+define build_cassandra_only
+    @echo "# building cassandra"
+    @cd cmd/cassandra && go build -v ${LDFLAGS}
+    @echo "# done"
+endef
+
 # clean helloworld only
 define clean_helloworld_only
     @echo "# cleaning hello world"
@@ -26,9 +33,17 @@ define clean_helloworld_only
     @echo "# done"
 endef
 
+# clean cassandra only
+define clean_cassandra_only
+    @echo "# cleaning cassandra"
+    @rm -f cmd/cassandra/cassandra
+    @echo "# done"
+endef
+
 # build all binaries
 build:
 	$(call build_helloworld_only)
+	$(call build_cassandra_only)
 
 # install dependencies
 install-dep:
@@ -45,11 +60,13 @@ lint:
 # clean
 clean:
 	$(call clean_helloworld_only)
+	$(call clean_cassandra_only)
 	@echo "# cleanup completed"
 
 # run all targets
 all:
 	$(call lint_only)
 	$(call build_helloworld_only)
+	$(call build_cassandra_only)
 
 .PHONY: build update-dep install-dep lint clean
