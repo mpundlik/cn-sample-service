@@ -18,118 +18,13 @@ import (
 	"github.com/ligato/cn-infra/db/sql"
 	"github.com/ligato/cn-infra/db/sql/cassandra"
 	"github.com/ligato/cn-infra/logging/logroot"
-	"github.com/ligato/cn-infra/utils/config"
 	"github.com/satori/go.uuid"
-	"github.com/smartystreets/assertions"
-	"github.com/willfaught/gockle"
-	"os"
-	"strconv"
-	"strings"
 	"time"
+	"github.com/smartystreets/assertions"
 )
 
-//TODO: need to clean up on error
-//TODO: optimize insert and select functions
-
-//setup used to setup Cassandra before running each request
-func setup(config *cassandra.ClientConfig) (session gockle.Session, err error) {
-	session1, sessionErr := createSession(config)
-	if sessionErr != nil {
-		logroot.StandardLogger().Errorf("Error creating session %v", sessionErr)
-		return nil, sessionErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
-
-	err1 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
-	if err1 != nil {
-		logroot.StandardLogger().Errorf("Error creating keyspace %v", err1)
-		return nil, err1
-	}
-
-	err2 := db.Exec(`CREATE TABLE IF NOT EXISTS example.tweet(timeline text, id text, text text, user text, PRIMARY KEY(id))`)
-	if err2 != nil {
-		logroot.StandardLogger().Errorf("Error creating table %v", err2)
-		return nil, err2
-	}
-
-	err3 := db.Exec(`CREATE TABLE IF NOT EXISTS example.person(id text, name text, PRIMARY KEY(id))`)
-	if err3 != nil {
-		logroot.StandardLogger().Errorf("Error creating table %v", err3)
-		return nil, err3
-	}
-
-	err4 := db.Exec(`CREATE INDEX IF NOT EXISTS ON example.tweet(timeline)`)
-	if err4 != nil {
-		logroot.StandardLogger().Errorf("Error creating index %v", err4)
-		return nil, err4
-	}
-
-	return session1, err
-}
-
-//tearDown used to clean up Cassandra after processing each request
-func tearDown(session gockle.Session) (err error) {
-
-	defer session.Close()
-
-	db := cassandra.NewBrokerUsingSession(session)
-
-	err1 := db.Exec(`DROP TABLE IF EXISTS example.tweet`)
-	if err1 != nil {
-		logroot.StandardLogger().Errorf("Error dropping table %v", err1)
-		return err1
-	}
-
-	err2 := db.Exec(`DROP TABLE IF EXISTS example2.user`)
-	if err2 != nil {
-		logroot.StandardLogger().Errorf("Error dropping table %v", err2)
-		return err2
-	}
-
-	err3 := db.Exec(`DROP TYPE IF EXISTS example2.address`)
-	if err3 != nil {
-		logroot.StandardLogger().Errorf("Error dropping type %v", err3)
-		return err3
-	}
-
-	err4 := db.Exec(`DROP TYPE IF EXISTS example2.phone`)
-	if err4 != nil {
-		logroot.StandardLogger().Errorf("Error dropping type %v", err4)
-		return err4
-	}
-
-	err5 := db.Exec(`DROP KEYSPACE IF EXISTS example`)
-	if err5 != nil {
-		logroot.StandardLogger().Errorf("Error dropping keyspace %v", err5)
-		return err5
-	}
-
-	err6 := db.Exec(`DROP KEYSPACE IF EXISTS example2`)
-	if err6 != nil {
-		logroot.StandardLogger().Errorf("Error dropping keyspace %v", err6)
-		return err6
-	}
-
-	return nil
-}
-
 //connectivity used to verify connectivity with Cassandra
-func connectivity() (err error) {
-
-	clientConfig, configErr := createConfig()
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
+func connectivity(db *cassandra.BrokerCassa) (err error) {
 
 	var insertTweet1 = &tweet{ID: uuid.NewV4().String(), Timeline: "me1", Text: "hello world1", User: "user1"}
 	insertErr1 := insert(db, insertTweet1)
@@ -152,34 +47,11 @@ func connectivity() (err error) {
 		return selectAllErr
 	}
 
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return tearDownErr
-	}
-
 	return nil
 }
 
 //alterTable used to depict support for ALTER TABLE
-func alterTable() (err error) {
-
-	clientConfig, configErr := createConfig()
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
+func alterTable(db *cassandra.BrokerCassa) (err error) {
 
 	err = db.Exec(`ALTER TABLE example.person ADD data text`)
 	if err != nil {
@@ -200,34 +72,11 @@ func alterTable() (err error) {
 		return selectErr
 	}
 
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return tearDownErr
-	}
-
 	return nil
 }
 
 //createKeySpaceIfNotExist used to depict support for IF NOT EXISTS clause while creating a keyspace
-func createKeySpaceIfNotExist() (err error) {
-
-	clientConfig, configErr := createConfig()
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
+func createKeySpaceIfNotExist(db *cassandra.BrokerCassa) (err error) {
 
 	//creating a non existing keyspace
 	err1 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example2 with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
@@ -261,20 +110,11 @@ func createKeySpaceIfNotExist() (err error) {
 		assertions.ShouldEqual(err4.Error(), "Cannot add existing keyspace \"example\"")
 	}
 
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return tearDownErr
-	}
-
 	return nil
 }
 
 //insertCustomizedDataStructure used to depict support for customized data structure, creating and using user-defined types and storing/retrieval
-func insertCustomizedDataStructure() (customAddress map[string]address, err error) {
+func insertCustomizedDataStructure(db *cassandra.BrokerCassa) (customAddress map[string]address, err error) {
 
 	var homePhone phone
 	homePhone.CountryCode = 1
@@ -308,20 +148,6 @@ func insertCustomizedDataStructure() (customAddress map[string]address, err erro
 	addressMap := make(map[string]address)
 	addressMap["home"] = homeAddr
 	addressMap["work"] = workAddr
-
-	clientConfig, configErr := createConfig()
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return nil, configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return nil, setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
 
 	err1 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example2 with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
 	if err1 != nil {
@@ -395,35 +221,12 @@ func insertCustomizedDataStructure() (customAddress map[string]address, err erro
 
 	logroot.StandardLogger().Infof("address = %v", users[0].Addresses)
 
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return nil, tearDownErr
-	}
-
 	return users[0].Addresses, nil
 }
 
 //reconnectInterval used to depict redial_interval timeout behavior
 //need to manually bring down cassandra during sleep interval, after bring it back up again we can retrieve results
-func reconnectInterval() (err error) {
-
-	clientConfig, configErr := loadConfig("/Users/mpundlik/go/src/github.com/ligato/cn-sample-service/cmd/cassandra/client-config.yaml")
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
+func reconnectInterval(db *cassandra.BrokerCassa) (err error) {
 
 	var insertTweet1 = &tweet{ID: uuid.NewV4().String(), Timeline: "me1", Text: "hello world1", User: "user1"}
 	insertErr1 := insert(db, insertTweet1)
@@ -451,34 +254,12 @@ func reconnectInterval() (err error) {
 		return selectAllErr
 	}
 
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return tearDownErr
-	}
-
 	return nil
 }
 
 //queryTimeout used to depict op_timeout timeout behavior
 //need to update the config to a very low op_timeout value (600ns) to get the expected timeout error
-func queryTimeout() (err error) {
-	clientConfig, configErr := loadConfig("/Users/mpundlik/go/src/github.com/ligato/cn-sample-service/cmd/cassandra/client-config.yaml")
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
+func queryTimeout(db *cassandra.BrokerCassa) (err error) {
 
 	var insertTweet1 = &tweet{ID: uuid.NewV4().String(), Timeline: "me1", Text: "hello world1", User: "user1"}
 	insertErr1 := insert(db, insertTweet1)
@@ -499,15 +280,6 @@ func queryTimeout() (err error) {
 	selectAllErr := selectAll(db)
 	if selectAllErr != nil {
 		return selectAllErr
-	}
-
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return tearDownErr
 	}
 
 	return err
@@ -515,20 +287,7 @@ func queryTimeout() (err error) {
 
 //connectTimeout used to depict dial_timeout timeout behavior
 //need to update the config to a very low dial_timeout value (600ns) to get the expected timeout error
-func connectTimeout() (err error) {
-	clientConfig, configErr := loadConfig("/Users/mpundlik/go/src/github.com/ligato/cn-sample-service/cmd/cassandra/client-config.yaml")
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}
-
-	session1, setupErr := setup(clientConfig)
-	if setupErr != nil {
-		logroot.StandardLogger().Errorf("Setup error = %v", setupErr)
-		return setupErr
-	}
-
-	db := cassandra.NewBrokerUsingSession(session1)
+func connectTimeout(db *cassandra.BrokerCassa) (err error) {
 
 	var insertTweet1 = &tweet{ID: uuid.NewV4().String(), Timeline: "me1", Text: "hello world1", User: "user1"}
 	insertErr1 := insert(db, insertTweet1)
@@ -549,15 +308,6 @@ func connectTimeout() (err error) {
 	selectAllErr := selectAll(db)
 	if selectAllErr != nil {
 		return selectAllErr
-	}
-
-	tearDownErr := tearDown(session1)
-	if tearDownErr != nil {
-		logroot.StandardLogger().Errorf("TearDown error = %v", tearDownErr)
-		if session1 != nil {
-			defer session1.Close()
-		}
-		return tearDownErr
 	}
 
 	return err
@@ -692,76 +442,4 @@ func (entity *person) SchemaName() string {
 // SchemaName schema name for user table
 func (entity *user) SchemaName() string {
 	return "example2"
-}
-
-//createSession used to create a session/connection with the given configuration
-func createSession(config *cassandra.ClientConfig) (session gockle.Session, err error) {
-
-	session1, err2 := cassandra.CreateSessionFromConfig(config)
-
-	if err2 != nil {
-		logroot.StandardLogger().Errorf("Error creating session %v", err2)
-		return nil, err2
-	}
-
-	session2 := gockle.NewSession(session1)
-
-	return session2, nil
-}
-
-//createConfig depicts use of creating a configuration structure
-func createConfig() (config *cassandra.ClientConfig, err error) {
-	// connect to the cluster
-	cassandraHost := os.Getenv("CASSANDRA_HOST")
-	cassandraPort := os.Getenv("CASSANDRA_PORT")
-	logroot.StandardLogger().Infof("Using cassandra host from environment variable %v", cassandraHost)
-	logroot.StandardLogger().Infof("Using cassandra port from environment variable %v", cassandraPort)
-
-	endpoints := strings.Split(cassandraHost, ",")
-
-	if cassandraPort == "" {
-		logroot.StandardLogger().Infof("Using default port, since CASSANDRA_PORT environment variable is not set")
-		cassandraPort = "9042"
-	}
-
-	port, portErr := strconv.Atoi(cassandraPort)
-	if portErr != nil {
-		logroot.StandardLogger().Errorf("Error getting cassandra port %v", portErr)
-		return nil, portErr
-	}
-
-	config1 := &cassandra.Config{
-		Endpoints:      endpoints,
-		Port:           port,
-		DialTimeout:    600,
-		OpTimeout:      60,
-		RedialInterval: 60,
-	}
-
-	clientConfig, err2 := cassandra.ConfigToClientConfig(config1)
-	if err != nil {
-		logroot.StandardLogger().Errorf("Error in converting from config to ClientConfig")
-		return nil, err2
-	}
-
-	return clientConfig, nil
-}
-
-//loadConfig used to create configuration structure from configuration file
-func loadConfig(configFileName string) (*cassandra.ClientConfig, error) {
-	var cfg cassandra.Config
-
-	err := config.ParseConfigFromYamlFile(configFileName, &cfg)
-	if err != nil {
-		logroot.StandardLogger().Errorf("Error parsing the yaml client configuration file")
-		return nil, err
-	}
-
-	clientConfig, err2 := cassandra.ConfigToClientConfig(&cfg)
-	if err != nil {
-		logroot.StandardLogger().Errorf("Error in converting from config to ClientConfig")
-		return nil, err2
-	}
-
-	return clientConfig, nil
 }
