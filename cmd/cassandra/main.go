@@ -15,6 +15,8 @@
 package main
 
 import (
+	"errors"
+	"github.com/gorilla/mux"
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/sql/cassandra"
 	"github.com/ligato/cn-infra/flavors/rpc"
@@ -46,17 +48,84 @@ type CassandraRestAPIPlugin struct {
 }
 
 //connectivityHandler defining route handler which performs basic connectivity test by reading/writing data to Cassandra
-func (plugin *CassandraRestAPIPlugin) connectivityHandler(formatter *render.Render) http.HandlerFunc {
+func (plugin *CassandraRestAPIPlugin) tweetsHandler(formatter *render.Render) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing connectivity by getting all tweets from tweets table.")
+		logroot.StandardLogger().Info("Received tweets request")
 
-		err := connectivity(plugin.broker)
+		pathParams := mux.Vars(req)
+		logroot.StandardLogger().Infof("pathParams = %v", pathParams)
 
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, "Connectivity successful")
+		switch req.Method {
+		case "POST":
+			err := insertTweets(plugin.broker)
+
+			if err != nil {
+				formatter.JSON(w, http.StatusInternalServerError, err.Error())
+			} else {
+				formatter.JSON(w, http.StatusOK, "Tweets inserted successfully")
+			}
+		case "GET":
+			if pathParams != nil && len(pathParams) > 0 {
+				id := pathParams["id"]
+				if id != "" {
+					result, err := getTweetByID(plugin.broker, id)
+
+					if err != nil {
+						formatter.JSON(w, http.StatusInternalServerError, err.Error())
+					} else {
+						formatter.JSON(w, http.StatusOK, result)
+					}
+				} else {
+					formatter.JSON(w, http.StatusBadRequest, errors.New("id is nil"))
+				}
+			} else {
+				result, err := getAllTweets(plugin.broker)
+
+				if err != nil {
+					formatter.JSON(w, http.StatusInternalServerError, err.Error())
+				} else {
+					formatter.JSON(w, http.StatusOK, result)
+				}
+			}
+		case "PUT":
+			if pathParams != nil && len(pathParams) > 0 {
+				id := pathParams["id"]
+				if id != "" {
+					err := insertTweet(plugin.broker, id)
+
+					if err != nil {
+						formatter.JSON(w, http.StatusInternalServerError, err.Error())
+					} else {
+						formatter.JSON(w, http.StatusCreated, "Tweet inserted successfully")
+					}
+				} else {
+					formatter.JSON(w, http.StatusBadRequest, errors.New("id is nil"))
+				}
+			} else {
+				formatter.JSON(w, http.StatusBadRequest, errors.New("Request not supported"))
+			}
+		case "DELETE":
+			if pathParams != nil && len(pathParams) > 0 {
+				id := pathParams["id"]
+				if id != "" {
+					err := deleteTweetByID(plugin.broker, id)
+
+					if err != nil {
+						formatter.JSON(w, http.StatusInternalServerError, err.Error())
+					} else {
+						formatter.JSON(w, http.StatusOK, "Tweet deleted successfully")
+					}
+				} else {
+					formatter.JSON(w, http.StatusBadRequest, errors.New("id is nil"))
+				}
+			} else {
+				formatter.JSON(w, http.StatusBadRequest, errors.New("Request not supported"))
+			}
+
+		default:
+			formatter.JSON(w, http.StatusMethodNotAllowed, nil)
+
 		}
 	}
 }
@@ -93,19 +162,49 @@ func (plugin *CassandraRestAPIPlugin) keyspaceIfNotExistHandler(formatter *rende
 	}
 }
 
-//customDataStructureHandler defining route handler which indicates use of custom data structure and types
+//usersHandler defining route handler which indicates use of user defined types
 //used to return map of addresses as HTTP response
-func (plugin *CassandraRestAPIPlugin) customDataStructureHandler(formatter *render.Render) http.HandlerFunc {
+func (plugin *CassandraRestAPIPlugin) usersHandler(formatter *render.Render) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing use of user-defined data types.")
 
-		addresses, err := insertCustomizedDataStructure(plugin.broker)
+		logroot.StandardLogger().Info("Received users request")
 
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, addresses)
+		pathParams := mux.Vars(req)
+		logroot.StandardLogger().Infof("pathParams = %v", pathParams)
+
+		switch req.Method {
+		case "POST":
+			err := insertUsers(plugin.broker)
+
+			if err != nil {
+				formatter.JSON(w, http.StatusInternalServerError, err.Error())
+			} else {
+				formatter.JSON(w, http.StatusOK, "Inserted users successfully")
+			}
+		case "GET":
+			if pathParams != nil && len(pathParams) > 0 {
+				id := pathParams["id"]
+				if id != "" {
+					result, err := getUserByID(plugin.broker, id)
+
+					if err != nil {
+						formatter.JSON(w, http.StatusInternalServerError, err.Error())
+					} else {
+						formatter.JSON(w, http.StatusOK, result)
+					}
+				} else {
+					formatter.JSON(w, http.StatusBadRequest, errors.New("id is nil"))
+				}
+			} else {
+				result, err := getAllUsers(plugin.broker)
+
+				if err != nil {
+					formatter.JSON(w, http.StatusInternalServerError, err.Error())
+				} else {
+					formatter.JSON(w, http.StatusOK, result)
+				}
+			}
 		}
 	}
 }
@@ -163,16 +262,16 @@ func main() {
 	f := rpc.FlavorRPC{}
 
 	// create an instance of the plugin
-	cassPlugin := CassandraRestAPIPlugin{}
+	cassRestAPIPlugin := CassandraRestAPIPlugin{}
 
 	// wire the dependencies
-	cassPlugin.HTTPHandlers = &f.HTTP
+	cassRestAPIPlugin.HTTPHandlers = &f.HTTP
 
 	// creating an instance of the named plugin
-	cassNamedPlugin := &core.NamedPlugin{PluginName: PluginID, Plugin: &cassPlugin}
+	cassRestAPINamedPlugin := &core.NamedPlugin{PluginName: PluginID, Plugin: &cassRestAPIPlugin}
 
 	// Create new agent
-	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(f.Plugins(), cassNamedPlugin)...)
+	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(f.Plugins(), cassRestAPINamedPlugin)...)
 
 	err := core.EventLoopWithInterrupt(agent, nil)
 	if err != nil {
@@ -190,19 +289,23 @@ func (plugin *CassandraRestAPIPlugin) Init() (err error) {
 func (plugin *CassandraRestAPIPlugin) AfterInit() error {
 	logroot.StandardLogger().Info("Cassandra REST API Plugin is up and running !!!")
 
-	//create configuration using config structure
+	// create configuration from a client configuration file
+	/*clientConfig, configErr := loadConfig("/Users/mpundlik/go/src/github.com/ligato/cn-sample-service/cmd/cassandra/client-config.yaml")
+	if configErr != nil {
+		logroot.StandardLogger().Errorf("Config err = %v", configErr)
+		return configErr
+	}*/
+
+	//OR create configuration using config structure
 	clientConfig, configErr := createConfig()
 	if configErr != nil {
 		logroot.StandardLogger().Errorf("Config err = %v", configErr)
 		return configErr
 	}
 
-	//OR create configuration from a client configuration file
-	/*clientConfig, configErr := loadConfig("/Users/mpundlik/go/src/github.com/ligato/cn-sample-service/cmd/cassandra/client-config.yaml")
-	if configErr != nil {
-		logroot.StandardLogger().Errorf("Config err = %v", configErr)
-		return configErr
-	}*/
+	logroot.StandardLogger().Infof("clientconfig = %v", clientConfig.ReconnectInterval)
+	logroot.StandardLogger().Infof("clientconfig = %v", clientConfig.Timeout)
+	logroot.StandardLogger().Infof("clientconfig = %v", clientConfig.ConnectTimeout)
 
 	session1, setupErr := setup(clientConfig)
 	if setupErr != nil {
@@ -215,10 +318,16 @@ func (plugin *CassandraRestAPIPlugin) AfterInit() error {
 	db := cassandra.NewBrokerUsingSession(session1)
 	plugin.broker = db
 
-	plugin.HTTPHandlers.RegisterHTTPHandler("/connectivity", plugin.connectivityHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsHandler, "POST")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsHandler, "PUT")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsHandler, "DELETE")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users/{id}", plugin.usersHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersHandler, "POST")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/altertable", plugin.alterTableHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/keyspaceifnotexists", plugin.keyspaceIfNotExistHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/customdatastructure", plugin.customDataStructureHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/reconnectinterval", plugin.reconnectIntervalHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/querytimeout", plugin.queryTimeoutHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/connecttimeout", plugin.connectTimeoutHandler, "GET")
@@ -269,6 +378,44 @@ func setup(config *cassandra.ClientConfig) (session gockle.Session, err error) {
 	if err4 != nil {
 		logroot.StandardLogger().Errorf("Error creating index %v", err4)
 		return nil, err4
+	}
+
+	err5 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example2 with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
+	if err5 != nil {
+		logroot.StandardLogger().Errorf("Error creating keyspace %v", err5)
+		return nil, err5
+	}
+
+	err6 := db.Exec(`CREATE TYPE IF NOT EXISTS example2.phone (
+			countryCode int,
+			number text,
+		)`)
+
+	if err6 != nil {
+		logroot.StandardLogger().Errorf("Error creating user-defined type phone %v", err6)
+		return nil, err6
+	}
+
+	err7 := db.Exec(`CREATE TYPE IF NOT EXISTS example2.address (
+			street text,
+			city text,
+			zip text,
+			phones map<text, frozen<phone>>
+		)`)
+
+	if err7 != nil {
+		logroot.StandardLogger().Errorf("Error creating user-defined type address %v", err7)
+		return nil, err7
+	}
+
+	err8 := db.Exec(`CREATE TABLE IF NOT EXISTS example2.user (
+			ID text PRIMARY KEY,
+			addresses map<text, frozen<address>>
+		)`)
+
+	if err8 != nil {
+		logroot.StandardLogger().Errorf("Error creating table user %v", err8)
+		return nil, err8
 	}
 
 	return session1, err
@@ -359,9 +506,9 @@ func createConfig() (config *cassandra.ClientConfig, err error) {
 	config1 := &cassandra.Config{
 		Endpoints:      endpoints,
 		Port:           port,
-		DialTimeout:    600,
+		DialTimeout:    600000000,
 		OpTimeout:      60,
-		RedialInterval: 60,
+		RedialInterval: 60000000000,
 	}
 
 	clientConfig, err2 := cassandra.ConfigToClientConfig(config1)
@@ -373,9 +520,8 @@ func createConfig() (config *cassandra.ClientConfig, err error) {
 	return clientConfig, nil
 }
 
-/* DO NOT DELETE - kept as an example
 //loadConfig used to create configuration structure from configuration file
-func loadConfig(configFileName string) (*cassandra.ClientConfig, error) {
+/*func loadConfig(configFileName string) (*cassandra.ClientConfig, error) {
 	var cfg cassandra.Config
 
 	err := config.ParseConfigFromYamlFile(configFileName, &cfg)

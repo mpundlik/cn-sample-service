@@ -19,32 +19,64 @@ import (
 	"github.com/ligato/cn-infra/db/sql/cassandra"
 	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/satori/go.uuid"
-	"time"
 	"github.com/smartystreets/assertions"
+	"time"
 )
 
-//connectivity used to verify connectivity with Cassandra
-func connectivity(db *cassandra.BrokerCassa) (err error) {
+//insertTweets used to handle POST to insert tweets in cassandra database
+func insertTweets(db *cassandra.BrokerCassa) (err error) {
 
 	var insertTweet1 = &tweet{ID: uuid.NewV4().String(), Timeline: "me1", Text: "hello world1", User: "user1"}
 	insertErr1 := insert(db, insertTweet1)
 	if insertErr1 != nil {
 		return insertErr1
 	}
+
 	var insertTweet2 = &tweet{ID: uuid.NewV4().String(), Timeline: "me2", Text: "hello world2", User: "user2"}
 	insertErr2 := insert(db, insertTweet2)
 	if insertErr2 != nil {
 		return insertErr2
 	}
 
-	selectErr := selectByID(db, &insertTweet1.ID)
-	if selectErr != nil {
-		return selectErr
+	return nil
+}
+
+func insertTweet(db *cassandra.BrokerCassa, id string) (err error) {
+
+	var insertTweet1 = &tweet{ID: id, Timeline: "me1", Text: "hello world1", User: "user1"}
+	insertErr1 := insert(db, insertTweet1)
+	if insertErr1 != nil {
+		return insertErr1
 	}
 
-	selectAllErr := selectAll(db)
+	return nil
+}
+
+func getAllTweets(db *cassandra.BrokerCassa) (result []*tweet, err error) {
+
+	result, selectAllErr := selectAll(db)
 	if selectAllErr != nil {
-		return selectAllErr
+		return nil, selectAllErr
+	}
+
+	return result, nil
+}
+
+func getTweetByID(db *cassandra.BrokerCassa, id string) (result *[]tweet, err error) {
+
+	result, selectErr := selectByID(db, &id)
+	if selectErr != nil {
+		return nil, selectErr
+	}
+
+	return result, nil
+}
+
+func deleteTweetByID(db *cassandra.BrokerCassa, id string) (err error) {
+
+	deleteErr := deleteByID(db, &id)
+	if deleteErr != nil {
+		return deleteErr
 	}
 
 	return nil
@@ -113,94 +145,43 @@ func createKeySpaceIfNotExist(db *cassandra.BrokerCassa) (err error) {
 	return nil
 }
 
-//insertCustomizedDataStructure used to depict support for customized data structure, creating and using user-defined types and storing/retrieval
-func insertCustomizedDataStructure(db *cassandra.BrokerCassa) (customAddress map[string]address, err error) {
+//insertUserDefinedType used to depict support for customized data structure, creating and using user-defined types and storing/retrieval
+func insertUsers(db *cassandra.BrokerCassa) (err error) {
 
-	var homePhone phone
-	homePhone.CountryCode = 1
-	homePhone.Number = "408-123-1234"
+	homePhone := phone{CountryCode: 1, Number: "408-123-1234"}
+	cellPhone := phone{CountryCode: 1, Number: "408-123-1235"}
+	workPhone := phone{CountryCode: 1, Number: "408-123-1236"}
 
-	var cellPhone phone
-	cellPhone.CountryCode = 1
-	cellPhone.Number = "408-123-1235"
+	phoneMap1 := map[string]phone{"home": homePhone, "cell": cellPhone}
+	homeAddr := address{City: "San Jose", Street: "123 Tasman Drive", Zip: "95135", Phones: phoneMap1}
 
-	var workPhone phone
-	workPhone.CountryCode = 1
-	workPhone.Number = "408-123-1236"
+	phoneMap2 := map[string]phone{"work": workPhone}
+	workAddr := address{City: "San Jose", Street: "255 E Tasman Drive", Zip: "95134", Phones: phoneMap2}
 
-	var homeAddr address
-	homeAddr.City = "San Jose"
-	homeAddr.Street = "123 Tasman Drive"
-	homeAddr.Zip = "95135"
-	phoneMap1 := make(map[string]phone)
-	phoneMap1["home"] = homePhone
-	phoneMap1["cell"] = cellPhone
-	homeAddr.Phones = phoneMap1
-
-	var workAddr address
-	workAddr.City = "San Jose"
-	workAddr.Street = "255 E Tasman Drive"
-	workAddr.Zip = "95134"
-	phoneMap2 := make(map[string]phone)
-	phoneMap2["work"] = workPhone
-	workAddr.Phones = phoneMap2
-
-	addressMap := make(map[string]address)
-	addressMap["home"] = homeAddr
-	addressMap["work"] = workAddr
-
-	err1 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example2 with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
-	if err1 != nil {
-		logroot.StandardLogger().Errorf("Error creating keyspace %v", err1)
-		return nil, err1
-	}
-
-	err2 := db.Exec(`CREATE TYPE IF NOT EXISTS example2.phone (
-			countryCode int,
-			number text,
-		)`)
-
-	if err2 != nil {
-		logroot.StandardLogger().Errorf("Error creating user-defined type phone %v", err2)
-		return nil, err2
-	}
-
-	err3 := db.Exec(`CREATE TYPE IF NOT EXISTS example2.address (
-			street text,
-			city text,
-			zip text,
-			phones map<text, frozen<phone>>
-		)`)
-
-	if err3 != nil {
-		logroot.StandardLogger().Errorf("Error creating user-defined type address %v", err)
-		return nil, err3
-	}
-
-	err4 := db.Exec(`CREATE TABLE IF NOT EXISTS example2.user (
-			ID text PRIMARY KEY,
-			addresses map<text, frozen<address>>
-		)`)
-
-	if err4 != nil {
-		logroot.StandardLogger().Errorf("Error creating table user %v", err4)
-		return nil, err4
-	}
+	addressMap := map[string]address{"home": homeAddr, "work": workAddr}
 
 	var insertUser1 = &user{ID: "user1", Addresses: addressMap}
 	insertErr1 := insertUserTable(db, insertUser1)
 	if insertErr1 != nil {
 		logroot.StandardLogger().Errorf("Insert error = %v", insertErr1)
-		return nil, insertErr1
+		return insertErr1
 	}
 
-	logroot.StandardLogger().Info("insert successful")
+	var insertUser2 = &user{ID: "user2", Addresses: addressMap}
+	insertErr2 := insertUserTable(db, insertUser2)
+	if insertErr2 != nil {
+		logroot.StandardLogger().Errorf("Insert error = %v", insertErr2)
+		return insertErr2
+	}
 
+	return nil
+}
+
+func getUserByID(db *cassandra.BrokerCassa, id string) (result []*user, err error) {
 	var UserTable = &user{}
 	users := []*user{}
 
-	query1 := sql.FROM(UserTable, sql.WHERE(sql.Field(&UserTable.ID, sql.EQ("user1"))))
-
+	query1 := sql.FROM(UserTable, sql.WHERE(sql.Field(&UserTable.ID, sql.EQ(id))))
 	it := db.ListValues(query1)
 	for {
 		user := &user{}
@@ -219,9 +200,33 @@ func insertCustomizedDataStructure(db *cassandra.BrokerCassa) (customAddress map
 
 	logroot.StandardLogger().Infof("users = %v", users)
 
-	logroot.StandardLogger().Infof("address = %v", users[0].Addresses)
+	return users, nil
+}
 
-	return users[0].Addresses, nil
+func getAllUsers(db *cassandra.BrokerCassa) (result []*user, err error) {
+	var UserTable = &user{}
+	users := []*user{}
+
+	query1 := sql.FROM(UserTable, sql.Exp(""))
+	it := db.ListValues(query1)
+	for {
+		user := &user{}
+		stop := it.GetNext(user)
+		if stop {
+			break
+		}
+		users = append(users, user)
+	}
+	itErr := it.Close()
+
+	if itErr != nil {
+		logroot.StandardLogger().Errorf("Error closing iterator %v", itErr)
+		return nil, itErr
+	}
+
+	logroot.StandardLogger().Infof("users = %v", users)
+
+	return users, nil
 }
 
 //reconnectInterval used to depict redial_interval timeout behavior
@@ -239,20 +244,20 @@ func reconnectInterval(db *cassandra.BrokerCassa) (err error) {
 		return insertErr2
 	}
 
-	selectErr := selectByID(db, &insertTweet1.ID)
-	if selectErr != nil {
-		return selectErr
-	}
+	//selectErr := selectByID(db, &insertTweet1.ID)
+	//if selectErr != nil {
+	//	return selectErr
+	//}
 
 	//sleep for 5 minutes (need to restart cassandra manually in the meantime)
 	logroot.StandardLogger().Infof("Sleep for 5 min - start %v", time.Now())
 	time.Sleep(5 * time.Minute)
 	logroot.StandardLogger().Infof("Sleep for 5 min - end")
 
-	selectAllErr := selectAll(db)
-	if selectAllErr != nil {
-		return selectAllErr
-	}
+	//selectAllErr := selectAll(db)
+	//if selectAllErr != nil {
+	//	return selectAllErr
+	//}
 
 	return nil
 }
@@ -272,15 +277,17 @@ func queryTimeout(db *cassandra.BrokerCassa) (err error) {
 		return insertErr2
 	}
 
-	selectErr := selectByID(db, &insertTweet1.ID)
+	result1, selectErr := selectByID(db, &insertTweet1.ID)
 	if selectErr != nil {
 		return selectErr
 	}
+	logroot.StandardLogger().Infof("result1 = %v", result1)
 
-	selectAllErr := selectAll(db)
+	result2, selectAllErr := selectAll(db)
 	if selectAllErr != nil {
 		return selectAllErr
 	}
+	logroot.StandardLogger().Infof("result2 = %v", result2)
 
 	return err
 }
@@ -300,15 +307,15 @@ func connectTimeout(db *cassandra.BrokerCassa) (err error) {
 		return insertErr2
 	}
 
-	selectErr := selectByID(db, &insertTweet1.ID)
-	if selectErr != nil {
-		return selectErr
-	}
+	//selectErr := selectByID(db, &insertTweet1.ID)
+	//if selectErr != nil {
+	//	return selectErr
+	//}
 
-	selectAllErr := selectAll(db)
-	if selectAllErr != nil {
-		return selectAllErr
-	}
+	//selectAllErr := selectAll(db)
+	//if selectAllErr != nil {
+	//	return selectAllErr
+	//}
 
 	return err
 }
@@ -365,7 +372,7 @@ func insertUserTable(db *cassandra.BrokerCassa, insertUser *user) (err error) {
 }
 
 //selectByID used to retrieve data from tweet table
-func selectByID(db *cassandra.BrokerCassa, id *string) (err error) {
+func selectByID(db *cassandra.BrokerCassa, id *string) (result *[]tweet, err error) {
 	start2 := time.Now()
 	var TweetTable = &tweet{}
 	tweets := &[]tweet{}
@@ -377,13 +384,13 @@ func selectByID(db *cassandra.BrokerCassa, id *string) (err error) {
 		elapsed2 := time.Since(start2)
 		logroot.StandardLogger().Infof("Time taken for select : %v", elapsed2)
 		logroot.StandardLogger().Errorf("Error executing select %v", err)
-		return err
+		return nil, err
 	}
 
 	elapsed2 := time.Since(start2)
 	logroot.StandardLogger().Infof("Time taken for select : %v", elapsed2)
 	logroot.StandardLogger().Info("Tweet:", tweets)
-	return nil
+	return tweets, nil
 }
 
 //selectPersonByID used to retrieve data from person table
@@ -409,9 +416,10 @@ func selectPersonByID(db *cassandra.BrokerCassa, id *string) (err error) {
 }
 
 //selectAll used to retrieve all records from tweet table
-func selectAll(db *cassandra.BrokerCassa) (err error) {
+func selectAll(db *cassandra.BrokerCassa) (result []*tweet, err error) {
 	start3 := time.Now()
 	var TweetTable = &tweet{}
+	var tweets = []*tweet{}
 	query2 := sql.FROM(TweetTable, nil)
 	iterator := db.ListValues(query2)
 	for {
@@ -421,11 +429,31 @@ func selectAll(db *cassandra.BrokerCassa) (err error) {
 			break
 		} else {
 			logroot.StandardLogger().Info("Tweet Item: ", tweetItem)
+			tweets = append(tweets, tweetItem)
 		}
 	}
 	iterator.Close()
 	elapsed3 := time.Since(start3)
 	logroot.StandardLogger().Infof("Time taken for select all : %v", elapsed3)
+	return tweets, nil
+}
+
+func deleteByID(db *cassandra.BrokerCassa, id *string) (err error) {
+	start2 := time.Now()
+	var TweetTable = &tweet{}
+
+	query1 := sql.FROM(TweetTable, sql.WHERE(sql.Field(&TweetTable.ID, sql.EQ(id))))
+	err = db.Delete(query1)
+
+	if err != nil {
+		elapsed2 := time.Since(start2)
+		logroot.StandardLogger().Infof("Time taken for delete : %v", elapsed2)
+		logroot.StandardLogger().Errorf("Error executing delete %v", err)
+		return err
+	}
+
+	elapsed2 := time.Since(start2)
+	logroot.StandardLogger().Infof("Time taken for delete : %v", elapsed2)
 	return nil
 }
 
