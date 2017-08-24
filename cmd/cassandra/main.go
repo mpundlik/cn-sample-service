@@ -130,38 +130,6 @@ func (plugin *CassandraRestAPIPlugin) tweetsHandler(formatter *render.Render) ht
 	}
 }
 
-//alterTableHandler defining route handler which performs table alteration by adding a column to person table
-func (plugin *CassandraRestAPIPlugin) alterTableHandler(formatter *render.Render) http.HandlerFunc {
-
-	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing Alter Table by adding a new column to tweets table.")
-
-		err := alterTable(plugin.broker)
-
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, "Alter table successful")
-		}
-	}
-}
-
-//keyspaceIfNotExistHandler defining route handler which indicates use of IF NOT EXISTS clause while creating a keyspace
-func (plugin *CassandraRestAPIPlugin) keyspaceIfNotExistHandler(formatter *render.Render) http.HandlerFunc {
-
-	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing use of IF NOT EXISTS clause.")
-
-		err := createKeySpaceIfNotExist(plugin.broker)
-
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, "Keyspace successful")
-		}
-	}
-}
-
 //usersHandler defining route handler which indicates use of user defined types
 //used to return map of addresses as HTTP response
 func (plugin *CassandraRestAPIPlugin) usersHandler(formatter *render.Render) http.HandlerFunc {
@@ -205,53 +173,6 @@ func (plugin *CassandraRestAPIPlugin) usersHandler(formatter *render.Render) htt
 					formatter.JSON(w, http.StatusOK, result)
 				}
 			}
-		}
-	}
-}
-
-//reconnectIntervalHandler defining route handler which allows configuring redial_interval for a session
-func (plugin *CassandraRestAPIPlugin) reconnectIntervalHandler(formatter *render.Render) http.HandlerFunc {
-
-	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing gocql reconnect interval behaviour.")
-
-		err := reconnectInterval(plugin.broker)
-
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, "Reconnect Interval successful")
-		}
-	}
-}
-
-//queryTimeoutHandler defining route handler which allows configuring op_timeout for a session
-func (plugin *CassandraRestAPIPlugin) queryTimeoutHandler(formatter *render.Render) http.HandlerFunc {
-
-	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing gocql timeout behaviour.")
-
-		err := queryTimeout(plugin.broker)
-
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, "Query Timeout successful")
-		}
-	}
-}
-
-//connectTimeoutHandler defining route handler which allows configuring dial_timeout for a session
-func (plugin *CassandraRestAPIPlugin) connectTimeoutHandler(formatter *render.Render) http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		logroot.StandardLogger().Info("Testing gocql connect timeout behaviour.")
-
-		err := connectTimeout(plugin.broker)
-
-		if err != nil {
-			formatter.JSON(w, http.StatusInternalServerError, err.Error())
-		} else {
-			formatter.JSON(w, http.StatusOK, "Connect Timeout successful")
 		}
 	}
 }
@@ -326,11 +247,6 @@ func (plugin *CassandraRestAPIPlugin) AfterInit() error {
 	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/users/{id}", plugin.usersHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersHandler, "POST")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/altertable", plugin.alterTableHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/keyspaceifnotexists", plugin.keyspaceIfNotExistHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/reconnectinterval", plugin.reconnectIntervalHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/querytimeout", plugin.queryTimeoutHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/connecttimeout", plugin.connectTimeoutHandler, "GET")
 
 	return nil
 }
@@ -366,12 +282,6 @@ func setup(config *cassandra.ClientConfig) (session gockle.Session, err error) {
 	if err2 != nil {
 		logroot.StandardLogger().Errorf("Error creating table %v", err2)
 		return nil, err2
-	}
-
-	err3 := db.Exec(`CREATE TABLE IF NOT EXISTS example.person(id text, name text, PRIMARY KEY(id))`)
-	if err3 != nil {
-		logroot.StandardLogger().Errorf("Error creating table %v", err3)
-		return nil, err3
 	}
 
 	err4 := db.Exec(`CREATE INDEX IF NOT EXISTS ON example.tweet(timeline)`)
