@@ -18,47 +18,45 @@ import (
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/keyval"
 	"github.com/ligato/cn-infra/db/keyval/plugin"
+	"github.com/ligato/cn-infra/flavors/localdeps"
 	"github.com/ligato/cn-infra/health/statuscheck"
-	"github.com/ligato/cn-infra/logging"
 	"github.com/ligato/cn-infra/servicelabel"
-	"github.com/ligato/cn-infra/utils/config"
 	"github.com/ligato/cn-infra/utils/safeclose"
-	"github.com/namsral/flag"
 )
 
 const (
-	// PluginID used in the Agent Core flavors
-	PluginID core.PluginName = "EtcdClient"
 	// healthCheckProbeKey is a key used to probe Etcd state
 	healthCheckProbeKey string = "/probe-etcd-connection"
 )
 
-var defaultConfigFileName string
-
 // Plugin implements Plugin interface therefore can be loaded with other plugins
 type Plugin struct {
-	Log logging.PluginLogger
-
-	ServiceLabel servicelabel.ReaderAPI
-	StatusCheck  *statuscheck.Plugin
-
+	Deps // inject
 	*plugin.Skeleton
+}
 
-	ConfigFileName string
+// Deps is here to group injected dependencies of plugin
+// to not mix with other plugin fields.
+type Deps struct {
+	localdeps.PluginInfraDeps // inject
 }
 
 // Init is called at plugin startup. The connection to etcd is established.
-func (p *Plugin) Init() error {
-	var err error
-
+func (p *Plugin) Init() (err error) {
 	// Retrieve config
-	cfg, err := p.retrieveConfig()
+	var cfg Config
+	_, err = p.PluginConfig.GetValue(&cfg)
+	// need to be strict about config presence for ETCD
+	//if !found {
+	//	p.Log.Info("etcd config not found ", p.PluginConfig.GetConfigName(), " - skip loading this plugin")
+	//	return nil
+	//}
 	if err != nil {
 		return err
 	}
 
 	// Init connection
-	etcdConfig, err := ConfigToClientv3(cfg)
+	etcdConfig, err := ConfigToClientv3(&cfg)
 	if err != nil {
 		return err
 	}
@@ -69,7 +67,7 @@ func (p *Plugin) Init() error {
 			return err
 		}
 
-		p.Skeleton = plugin.NewSkeleton(string(PluginID),
+		p.Skeleton = plugin.NewSkeleton(p.String(),
 			p.ServiceLabel,
 			con,
 		)
@@ -79,9 +77,14 @@ func (p *Plugin) Init() error {
 		return err
 	}
 
+	return nil
+}
+
+// AfterInit is called by the Agent Core after all plugins have been initialized.
+func (p *Plugin) AfterInit() error {
 	// Register for providing status reports (polling mode)
 	if p.StatusCheck != nil {
-		p.StatusCheck.Register(PluginID, func() (statuscheck.PluginState, error) {
+		p.StatusCheck.Register(core.PluginName(p.String()), func() (statuscheck.PluginState, error) {
 			_, _, err := p.Skeleton.NewBroker("/").GetValue(healthCheckProbeKey, nil)
 			if err == nil {
 				return statuscheck.OK, nil
@@ -97,7 +100,7 @@ func (p *Plugin) Init() error {
 
 // FromExistingConnection is used mainly for testing
 func FromExistingConnection(connection keyval.CoreBrokerWatcher, sl servicelabel.ReaderAPI) *Plugin {
-	skel := plugin.NewSkeleton(string(PluginID), sl, connection)
+	skel := plugin.NewSkeleton("testing", sl, connection)
 	return &Plugin{Skeleton: skel}
 }
 
@@ -107,24 +110,10 @@ func (p *Plugin) Close() error {
 	return err
 }
 
-func init() {
-	flag.StringVar(&defaultConfigFileName, "etcdv3-config", "", "Location of the Etcd configuration file; also set via 'ETCDV3_CONFIG' env variable.")
-}
-
-func (p *Plugin) retrieveConfig() (*Config, error) {
-	cfg := &Config{}
-	var configFile string
-	if p.ConfigFileName != "" {
-		configFile = p.ConfigFileName
-	} else if defaultConfigFileName != "" {
-		configFile = defaultConfigFileName
+// String returns if set Deps.PluginName or "kvdbsync" otherwise
+func (p *Plugin) String() string {
+	if len(p.Deps.PluginName) == 0 {
+		return "kvdbsync"
 	}
-
-	if configFile != "" {
-		err := config.ParseConfigFromYamlFile(configFile, cfg)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return cfg, nil
+	return string(p.Deps.PluginName)
 }

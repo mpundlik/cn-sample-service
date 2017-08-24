@@ -1,7 +1,7 @@
 package: github.com/ligato/cn-sample-service
 import:
 - package: github.com/ligato/cn-infra
-  version: 499f86bdc4a75714962df358ed6582788217d302
+  version: 341de6b1976e2eaeb67ddf1b1e2af24953e83def
 - package: github.com/Sirupsen/logrus
   version: v1.0.0
   repo: https://github.com/sirupsen/logrus.git

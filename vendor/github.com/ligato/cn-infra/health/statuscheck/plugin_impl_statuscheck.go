@@ -25,9 +25,6 @@ import (
 	"github.com/ligato/cn-infra/logging"
 )
 
-// PluginID uniquely identifies the plugin.
-const PluginID core.PluginName = "StatusCheck"
-
 const (
 	// Init state means that the initialization of the plugin is in progress.
 	Init PluginState = "init"
@@ -42,7 +39,7 @@ const (
 
 // Plugin struct holds all plugin-related data.
 type Plugin struct {
-	Log logging.PluginLogger
+	Deps
 
 	access sync.Mutex // lock for the Plugin data
 
@@ -52,13 +49,18 @@ type Plugin struct {
 
 	cancel context.CancelFunc // cancel can be used to cancel all goroutines and their jobs inside of the plugin
 	wg     sync.WaitGroup     // wait group that allows to wait until all goroutines of the plugin have finished
+}
 
-	Transport datasync.KeyProtoValWriter
+// Deps is here to group injected dependencies of plugin
+// to not mix with other plugin fields.
+type Deps struct {
+	Log        logging.PluginLogger       //inject
+	PluginName core.PluginName            //inject
+	Transport  datasync.KeyProtoValWriter //inject optional
 }
 
 // Init is the plugin entry point called by the Agent Core.
 func (p *Plugin) Init() error {
-
 	// write initial status data into ETCD
 	p.agentStat = &status.AgentStatus{
 		BuildVersion: core.BuildVersion,
@@ -67,8 +69,6 @@ func (p *Plugin) Init() error {
 		StartTime:    time.Now().Unix(),
 		LastChange:   time.Now().Unix(),
 	}
-
-	p.publishAgentData()
 
 	// init pluginStat map
 	p.pluginStat = make(map[string]*status.PluginStatus)
@@ -93,6 +93,8 @@ func (p *Plugin) Init() error {
 func (p *Plugin) AfterInit() error {
 	p.access.Lock()
 	defer p.access.Unlock()
+
+	p.publishAgentData()
 
 	// transition to OK state if there are no plugins
 	if len(p.pluginStat) == 0 {
@@ -158,7 +160,7 @@ func (p *Plugin) ReportStateChange(pluginName core.PluginName, state PluginState
 		return
 	}
 
-	p.Log.WithFields(map[string]interface{}{"plugin": pluginName, "state": state, "lastErr": lastError}).Debug(
+	p.Log.WithFields(map[string]interface{}{"plugin": pluginName, "state": state, "lastErr": lastError}).Info(
 		"Agent plugin state update.")
 
 	// update plugin state

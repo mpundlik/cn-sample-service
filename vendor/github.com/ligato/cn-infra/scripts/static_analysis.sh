@@ -10,9 +10,11 @@ function static_analysis() {
   local FILES=$(find "${PWD}" -mount -name "*.go" -type f -not -path "${PWD}/vendor/*" -exec grep -LE "${WHITELIST_CONTENT}"  {} +)
 
   local CORE=$(${TOOL} "${PWD}/core${SELECTOR}")
+  local CONFIG=$(${TOOL} "${PWD}/config${SELECTOR}")
   local DATASYNC=$(${TOOL} "${PWD}/datasync${SELECTOR}")
   local DB=$(${TOOL} "${PWD}/db${SELECTOR}")
   local EXAMPLES=$(${TOOL} "${PWD}/examples${SELECTOR}")
+  local FLAVORS=$(${TOOL} "${PWD}/flavors${SELECTOR}")
   local HTTPMUX=$(${TOOL} "${PWD}/rpc/rest${SELECTOR}")
   local IDXMAP=$(${TOOL} "${PWD}/idxmap${SELECTOR}")
   local LOGGING=$(${TOOL} "${PWD}/logging${SELECTOR}")
@@ -23,9 +25,11 @@ function static_analysis() {
   local UTILS=$(${TOOL} "${PWD}/utils${SELECTOR}")
 
   local ALL="$CORE
+$CONFIG
 $DATASYNC
 $DB
 $EXAMPLES
+$FLAVORS
 $HTTPMUX
 $IDXMAP
 $LOGGING

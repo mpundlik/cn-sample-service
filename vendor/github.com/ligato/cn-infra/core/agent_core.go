@@ -70,7 +70,9 @@ func (agent *Agent) Start() error {
 	doneChannel := make(chan struct{}, 0)
 	errChannel := make(chan error, 0)
 
-	flag.Parse()
+	if !flag.Parsed() {
+		flag.Parse()
+	}
 
 	go func() {
 		err := agent.initPlugins()
@@ -94,7 +96,7 @@ func (agent *Agent) Start() error {
 		agent.Info("All plugins initialized successfully")
 		return nil
 	case <-time.After(agent.MaxStartupTime):
-		//TODO FIX - stop the initialization and close allready initialized
+		//TODO FIX - stop the initialization and close already initialized
 		return fmt.Errorf("%s", "Some plugins not intialized before timeout")
 	}
 }

@@ -16,35 +16,28 @@ package kafka
 
 import (
 	"github.com/Shopify/sarama"
-	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/keyval"
+	"github.com/ligato/cn-infra/flavors/localdeps"
 	"github.com/ligato/cn-infra/health/statuscheck"
 	"github.com/ligato/cn-infra/logging"
 	"github.com/ligato/cn-infra/messaging"
 	"github.com/ligato/cn-infra/messaging/kafka/client"
 	"github.com/ligato/cn-infra/messaging/kafka/mux"
-	"github.com/ligato/cn-infra/servicelabel"
 	"github.com/ligato/cn-infra/utils/safeclose"
-	"github.com/namsral/flag"
 )
-
-// PluginID used in the Agent Core flavors
-const PluginID core.PluginName = "KafkaClient"
-
-var configFile string
-
-func init() {
-	flag.StringVar(&configFile, "kafka-config", "", "Location of the Kafka configuration file; also set via 'KAFKA_CONFIG' env variable.")
-}
 
 // Plugin provides API for interaction with kafka brokers.
 type Plugin struct {
-	Log          logging.PluginLogger
-	ServiceLabel servicelabel.ReaderAPI
-	StatusCheck  *statuscheck.Plugin
+	Deps // inject
 	subscription chan (*client.ConsumerMessage)
 	mx           *mux.Multiplexer
 	consumer     *client.Consumer
+}
+
+// Deps is here to group injected dependencies of plugin
+// to not mix with other plugin fields.
+type Deps struct {
+	localdeps.PluginInfraDeps //inject
 }
 
 // FromExistingMux is used mainly for testing purposes.
@@ -60,11 +53,13 @@ func (p *Plugin) Init() (err error) {
 
 	// Get config data
 	config := &mux.Config{}
-	if configFile != "" {
-		config, err = mux.ConfigFromFile(configFile)
-		if err != nil {
-			return err
-		}
+	found, err := p.PluginConfig.GetValue(config)
+	if !found {
+		p.Log.Info("kafka config not found ", p.PluginConfig.GetConfigName(), " - skip loading this plugin")
+		return nil //skip loading the plugin
+	}
+	if err != nil {
+		return err
 	}
 	clientConfig := p.getClientConfig(config, p.Log, topic)
 
@@ -76,7 +71,7 @@ func (p *Plugin) Init() (err error) {
 
 	// Register for providing status reports (polling mode)
 	if p.StatusCheck != nil {
-		p.StatusCheck.Register(PluginID, func() (statuscheck.PluginState, error) {
+		p.StatusCheck.Register(p.PluginName, func() (statuscheck.PluginState, error) {
 			// Method 'RefreshMetadata()' returns error if kafka server is unavailable
 			err := p.consumer.Client.RefreshMetadata(topic)
 			if err == nil {
@@ -90,7 +85,7 @@ func (p *Plugin) Init() (err error) {
 	}
 
 	if p.mx == nil {
-		p.mx, err = mux.InitMultiplexer(configFile, p.ServiceLabel.GetAgentLabel(), p.Log)
+		p.mx, err = mux.InitMultiplexerWithConfig(config, p.ServiceLabel.GetAgentLabel(), p.Log)
 	}
 
 	return err

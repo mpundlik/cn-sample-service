@@ -43,6 +43,9 @@ type Logger interface {
 	WithField(key string, value interface{}) LogWithLevel
 	// WithFields creates multiple structured fields
 	WithFields(fields map[string]interface{}) LogWithLevel
+
+	// GetName return the logger name
+	GetName() string
 }
 
 // LogFactory is API for the plugins that want to create their own loggers.
@@ -158,6 +161,6 @@ type prefixedLogFactory struct {
 	delegate LogFactory
 }
 
-func (factory *prefixedLogFactory) NewLogger(name string) (Logger) {
+func (factory *prefixedLogFactory) NewLogger(name string) Logger {
 	return factory.delegate.NewLogger(factory.prefix + name)
 }

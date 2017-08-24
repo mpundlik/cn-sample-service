@@ -33,7 +33,7 @@ import (
 	"github.com/ligato/cn-infra/db/keyval"
 	"github.com/ligato/cn-infra/logging"
 	"github.com/ligato/cn-infra/logging/logroot"
-	"github.com/ligato/cn-infra/utils/config"
+	"github.com/ligato/cn-infra/config"
 	"github.com/ligato/cn-infra/utils/safeclose"
 	"github.com/onsi/gomega"
 )
@@ -349,6 +349,7 @@ func TestKeyIterator(t *testing.T) {
 
 	// test it.index
 	iterator, err = bytesBrokerWatcher.ListKeys(prefix)
+	gomega.Expect(err).To(gomega.BeNil())
 	it = iterator.(*bytesKeyIterator)
 	it.index = max
 	it.cursor = 1 // This only meant to trigger scan.  miniRedis, however, will not accept non 0 cursor.
@@ -387,6 +388,7 @@ func TestKeyValIterator(t *testing.T) {
 
 	// test it.index
 	iterator, err = bytesBrokerWatcher.ListValues(prefix)
+	gomega.Expect(err).To(gomega.BeNil())
 	it = iterator.(*bytesKeyValIterator)
 	it.index = max
 	it.cursor = 1 // This only meant to trigger scan.  miniRedis, however, will not accept non 0 cursor.

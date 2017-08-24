@@ -15,15 +15,15 @@
 package main
 
 import (
-	"flag"
+	"github.com/namsral/flag"
 	"fmt"
 	"os"
 
 	"strings"
 
+	"github.com/ligato/cn-infra/examples/kafka_broker/utils"
 	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/ligato/cn-infra/messaging/kafka/client"
-	"github.com/ligato/cn-infra/examples/kafka_broker/utils"
 )
 
 var (

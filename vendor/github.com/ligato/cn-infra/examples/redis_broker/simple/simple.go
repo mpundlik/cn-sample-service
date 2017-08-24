@@ -15,7 +15,7 @@ import (
 	"github.com/ligato/cn-infra/db/keyval/redis"
 	"github.com/ligato/cn-infra/logging"
 	"github.com/ligato/cn-infra/logging/logroot"
-	"github.com/ligato/cn-infra/utils/config"
+	"github.com/ligato/cn-infra/config"
 	"github.com/ligato/cn-infra/utils/safeclose"
 	"github.com/namsral/flag"
 )
@@ -330,7 +330,7 @@ func del(keyPrefix string, opt ...datasync.DelOption) {
 	var found bool
 	var err error
 
-	found, err = broker.Delete(keyPrefix, opt)
+	found, err = broker.Delete(keyPrefix, opt...)
 	if err != nil {
 		log.Error(err.Error())
 		return
@@ -376,11 +376,11 @@ func generateSampleConfigs() {
 	var cfg interface{}
 
 	cfg = redis.NodeConfig{
-		Endpoint:               "localhost:6379",
-		DB:                     0,
+		Endpoint: "localhost:6379",
+		DB:       0,
 		EnableReadQueryOnSlave: false,
-		TLS:                    redis.TLS{},
-		ClientConfig:           clientConfig,
+		TLS:          redis.TLS{},
+		ClientConfig: clientConfig,
 	}
 	config.SaveConfigToYamlFile(cfg, "./node-client.yaml", 0644, makeTypeHeader(cfg))
 

@@ -23,42 +23,44 @@ package flavorexample
 
 import (
 	"github.com/ligato/cn-infra/core"
-	"github.com/ligato/cn-infra/health/statuscheck"
+	"github.com/ligato/cn-infra/flavors/rpc"
+	"github.com/ligato/cn-infra/rpc/rest"
 )
 
 type CompositeFlavor struct {
-	rpc.FlavorRPC //Reused Flavor
-	PluginXY PluginXY
-	injected bool
+	rpc.FlavorRPC     // Reused Flavor
+	PluginXY PluginXY // Added custom plugin to flavor
 }
 
-func (Flavor *CompositeFlavor) Inject() error {
-	if Flavor.injected {
-		return nil
-	}
-	Flavor.injected = true
-	if err := Flavor.FlavorRPC.Inject(); err != nil {
-	    return err
+func (flavor *CompositeFlavor) Inject() bool {
+	if !flavor.FlavorRPC.Inject() {
+	    return false
 	}
 
-    Flavor.PluginXY.HTTP = &Flavor.FlavorRPC.HTTP
+    flavor.PluginXY.HTTP = &flavor.FlavorRPC.HTTP
 	// inject all other dependencies...
 	
 	return nil
 }
 
-func (Flavor *CompositeFlavor) Plugins() []*core.NamedPlugin {
-	Flavor.Inject()
-	return core.ListPluginsInFlavor(Flavor)
+func (flavor *CompositeFlavor) Plugins() []*core.NamedPlugin {
+	flavor.Inject()
+	return core.ListPluginsInFlavor(flavor)
 }
 
 
 type PluginXY struct {
-    HTTP httpmux.HttpHandlers
+    Dep // plugin dependencies
+}
+
+type Dep struct {
+    HTTP rest.HTTPHandlers // injected, this plugin just depends on the API interface
 }
 
 func (plugin* PluginXY) Init() error {
-    // do something
+    // use injected dependency
+    plugin.HTTP.RegisterHTTPHandler(...)
+    
     return nil
 }
 
