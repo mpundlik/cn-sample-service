@@ -173,6 +173,8 @@ func (plugin *CassandraRestAPIPlugin) usersHandler(formatter *render.Render) htt
 					formatter.JSON(w, http.StatusOK, result)
 				}
 			}
+		default:
+			formatter.JSON(w, http.StatusMethodNotAllowed, nil)
 		}
 	}
 }
@@ -257,6 +259,7 @@ func (plugin *CassandraRestAPIPlugin) Close() error {
 	err := closeConnection(plugin.session)
 	if err != nil {
 		logroot.StandardLogger().Errorf("Error closing connection %v", err)
+		os.Exit(1)
 	}
 
 	return nil
