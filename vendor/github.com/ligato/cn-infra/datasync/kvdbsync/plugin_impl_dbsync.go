@@ -15,6 +15,7 @@
 package kvdbsync
 
 import (
+	"errors"
 	"github.com/golang/protobuf/proto"
 	"github.com/ligato/cn-infra/datasync"
 	"github.com/ligato/cn-infra/datasync/resync"
@@ -37,9 +38,14 @@ type Deps struct {
 	KvPlugin                  keyval.KvProtoPlugin // inject
 }
 
-// Init uses provided connection to build new transport watcher
+// Init does nothing
 func (plugin *Plugin) Init() error {
-	if plugin.KvPlugin != nil {
+	return nil
+}
+
+// AfterInit uses provided connection to build new transport watcher
+func (plugin *Plugin) AfterInit() error {
+	if plugin.KvPlugin != nil && !plugin.KvPlugin.Disabled() {
 		db := plugin.KvPlugin.NewBroker(plugin.ServiceLabel.GetAgentPrefix())
 		dbW := plugin.KvPlugin.NewWatcher(plugin.ServiceLabel.GetAgentPrefix())
 
@@ -53,6 +59,14 @@ func (plugin *Plugin) Init() error {
 func (plugin *Plugin) Watch(resyncName string, changeChan chan datasync.ChangeEvent,
 	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (datasync.WatchRegistration, error) {
 
+	if plugin.KvPlugin.Disabled() {
+		return nil/*TODO*/, nil
+	}
+
+	if plugin.adapter == nil {
+		return nil, errors.New("Transport adapter is not ready yet")
+	}
+	
 	reg, err := plugin.adapter.base.Watch(resyncName, changeChan, resyncChan, keyPrefixes...)
 	if err != nil {
 		return nil, err
@@ -69,7 +83,15 @@ func (plugin *Plugin) Watch(resyncName string, changeChan chan datasync.ChangeEv
 
 // Put to ETCD or any other data transport (from other Agent Plugins)
 func (plugin *Plugin) Put(key string, data proto.Message, opts ...datasync.PutOption) error {
-	return plugin.adapter.db.Put(key, data, opts...)
+	if plugin.KvPlugin.Disabled() {
+		return nil
+	}
+	
+	if plugin.adapter != nil {
+ 		return plugin.adapter.db.Put(key, data, opts...)
+ 	}
+	
+	return errors.New("Transport adapter is not ready yet")
 }
 
 // Close resources

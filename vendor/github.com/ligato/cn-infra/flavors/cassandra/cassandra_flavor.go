@@ -12,31 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package rpc
+package cassandra
 
 import (
 	"github.com/ligato/cn-infra/core"
+	"github.com/ligato/cn-infra/db/sql/cassandra"
 	"github.com/ligato/cn-infra/flavors/local"
-	"github.com/ligato/cn-infra/health/probe"
-	"github.com/ligato/cn-infra/logging/logmanager"
-	"github.com/ligato/cn-infra/rpc/rest"
+	"github.com/namsral/flag"
 )
 
-// FlavorRPC glues together multiple plugins that are useful for almost every micro-service
-type FlavorRPC struct {
+//init defines cassandra flags // TODO switch to viper to avoid global configuration
+func init() {
+	flag.String("cassandra-config", "cassandra.conf",
+		"Location of the Cassandra Client configuration file; also set via 'CASSANDRA_CONFIG' env variable.")
+}
+
+// FlavorCassandra glues together FlavorRPC plugins with:
+// - Cassandra (for using with API to interact with Cassandra database)
+type FlavorCassandra struct {
 	*local.FlavorLocal
-
-	HTTP rest.Plugin
-	//TODO GRPC (& enable/disable using config)
-
-	HealthRPC probe.Plugin
-	LogMngRPC logmanager.Plugin
+	Cassandra cassandra.Plugin
 
 	injected bool
 }
 
 // Inject sets object references
-func (f *FlavorRPC) Inject() bool {
+func (f *FlavorCassandra) Inject() bool {
 	if f.injected {
 		return false
 	}
@@ -45,24 +46,14 @@ func (f *FlavorRPC) Inject() bool {
 	if f.FlavorLocal == nil {
 		f.FlavorLocal = &local.FlavorLocal{}
 	}
-	f.FlavorLocal.Inject()
 
-	f.HTTP.Deps.PluginLogDeps = *f.LogDeps("http")
-
-	f.LogMngRPC.Deps.PluginLogDeps = *f.LogDeps("log-mng-rpc")
-	f.LogMngRPC.LogRegistry = f.FlavorLocal.LogRegistry()
-	f.LogMngRPC.HTTP = &f.HTTP
-
-	f.HealthRPC.Deps.PluginLogDeps = *f.LogDeps("health-rpc")
-	f.HealthRPC.Deps.HTTP = &f.HTTP
-	f.HealthRPC.Deps.StatusCheck = &f.StatusCheck
-	//TODO f.HealthRPC.Transport inject restsync
+	f.Cassandra.Deps.PluginInfraDeps = *f.InfraDeps("cassandra")
 
 	return true
 }
 
 // Plugins combines all Plugins in flavor to the list
-func (f *FlavorRPC) Plugins() []*core.NamedPlugin {
+func (f *FlavorCassandra) Plugins() []*core.NamedPlugin {
 	f.Inject()
 	return core.ListPluginsInFlavor(f)
 }
