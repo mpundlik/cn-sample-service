@@ -15,19 +15,21 @@
 package main
 
 import (
-	"github.com/ligato/cn-infra/config"
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/sql"
 	"github.com/ligato/cn-infra/db/sql/cassandra"
+	"github.com/ligato/cn-infra/flavors/localdeps"
 	"github.com/ligato/cn-infra/flavors/rpc"
 	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/ligato/cn-infra/rpc/rest"
+	"github.com/namsral/flag"
 	"os"
 	"time"
 )
 
 type Deps struct {
 	// httpmux is a dependency of the plugin that needs to be injected.
+	localdeps.PluginLogDeps
 	HTTPHandlers rest.HTTPHandlers
 	BrokerPlugin sql.BrokerPlugin
 }
@@ -36,12 +38,12 @@ type CassandraRestFlavor struct {
 	rpc.FlavorRPC
 	CASSANDRA cassandra.Plugin
 	CassandraRestAPIPlugin
-	injected bool
 }
 
 // CassandraRestAPIPlugin is a plugin that showcase the extensibility of vpp agent.
 type CassandraRestAPIPlugin struct {
 	Deps
+
 	// broker stores the cassandra data broker
 	broker sql.Broker
 }
@@ -51,18 +53,13 @@ func main() {
 
 	flavor := CassandraRestFlavor{}
 
-	cassRESTPlugin := CassandraRestAPIPlugin{}
-	cassRESTPlugin.Deps.HTTPHandlers = &flavor.HTTP
-	cassRESTPlugin.Deps.BrokerPlugin = &flavor.CASSANDRA
-
-	flavor.CassandraRestAPIPlugin = cassRESTPlugin
-
 	// Create new agent
 	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(flavor.Plugins())...)
 
 	err := core.EventLoopWithInterrupt(agent, nil)
 	if err != nil {
 		logroot.StandardLogger().Errorf("Error in event loop %v", err)
+		os.Exit(1)
 	}
 }
 
@@ -73,20 +70,24 @@ func (plugin *CassandraRestAPIPlugin) Init() (err error) {
 
 // AfterInit logs a sample message.
 func (plugin *CassandraRestAPIPlugin) AfterInit() error {
-	logroot.StandardLogger().Info("Cassandra REST API Plugin is up and running !!!")
-
-	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsHandler, "POST")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsHandler, "PUT")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsHandler, "DELETE")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/users/{id}", plugin.usersHandler, "GET")
-	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersHandler, "POST")
+	plugin.Log.Info("Cassandra REST API Plugin is up and running !!!")
 
 	plugin.broker = plugin.BrokerPlugin.NewBroker()
 
-	plugin.setup()
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsGetHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsGetHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsPostHandler, "POST")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsPutHandler, "PUT")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsDeleteHandler, "DELETE")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersGetHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users/{id}", plugin.usersGetHandler, "GET")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users/{id}", plugin.usersPutHandler, "PUT")
+	plugin.HTTPHandlers.RegisterHTTPHandler("/users", plugin.usersPostHandler, "POST")
+
+	err := plugin.setup()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -94,10 +95,9 @@ func (plugin *CassandraRestAPIPlugin) AfterInit() error {
 // Close is called to cleanup the plugin resources.
 func (plugin *CassandraRestAPIPlugin) Close() error {
 
-	err := plugin.closeConnection()
+	err := plugin.teardown()
 	if err != nil {
-		logroot.StandardLogger().Errorf("Error closing connection %v", err)
-		os.Exit(1)
+		return err
 	}
 
 	return nil
@@ -166,8 +166,8 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 	return nil
 }
 
-//closeConnection used to clean up and close connection to cassandra
-func (plugin *CassandraRestAPIPlugin) closeConnection() (err error) {
+//teardown used to clean up tables/schema from cassandra
+func (plugin *CassandraRestAPIPlugin) teardown() (err error) {
 
 	db := plugin.broker
 
@@ -211,13 +211,15 @@ func (plugin *CassandraRestAPIPlugin) closeConnection() (err error) {
 }
 
 // Inject sets object references
-func (f *CassandraRestFlavor) Inject() (allReadyInjected bool) {
+func (f *CassandraRestFlavor) Inject() (isInjected bool) {
 	if !f.FlavorRPC.Inject() {
 		return false
 	}
 
+	f.CassandraRestAPIPlugin.Deps.HTTPHandlers = &f.HTTP
+	f.CassandraRestAPIPlugin.Deps.BrokerPlugin = &f.CASSANDRA
 	f.CASSANDRA.Deps.PluginInfraDeps = *f.InfraDeps("cassandra")
-	f.CASSANDRA.Deps.PluginInfraDeps.PluginConfig = config.ForPlugin("cassandra")
+	f.CassandraRestAPIPlugin.Deps.PluginLogDeps = *f.LogDeps("cassandra-rest-api-plugin")
 
 	return true
 }
@@ -226,4 +228,10 @@ func (f *CassandraRestFlavor) Inject() (allReadyInjected bool) {
 func (f *CassandraRestFlavor) Plugins() []*core.NamedPlugin {
 	f.Inject()
 	return core.ListPluginsInFlavor(f)
+}
+
+//init defines cassandra flags // TODO switch to viper to avoid global configuration
+func init() {
+	flag.String("cassandra-config", "cassandra.conf.yaml",
+		"Location of the Cassandra Client configuration file; also set via 'CASSANDRA_CONFIG' env variable.")
 }

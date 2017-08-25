@@ -61,7 +61,7 @@ func getAllTweets(db sql.Broker) (result *[]tweet, err error) {
 }
 
 //getTweetByID used to handle GET to get a tweet by ID from cassandra database
-func getTweetByID(db sql.Broker, id string) (result *[]tweet, err error) {
+func getTweetByID(db sql.Broker, id string) (result *tweet, err error) {
 
 	result, selectErr := selectByID(db, &id)
 	if selectErr != nil {
@@ -89,13 +89,13 @@ func insertUsers(db sql.Broker) (err error) {
 	cellPhone := phone{CountryCode: 1, Number: "408-123-1235"}
 	workPhone := phone{CountryCode: 1, Number: "408-123-1236"}
 
-	phoneMap1 := map[string]phone{"home": homePhone, "cell": cellPhone}
+	phoneMap1 := map[string]phone{"Home": homePhone, "Cell": cellPhone}
 	homeAddr := address{City: "San Jose", Street: "123 Tasman Drive", Zip: "95135", Phones: phoneMap1}
 
-	phoneMap2 := map[string]phone{"work": workPhone}
+	phoneMap2 := map[string]phone{"Work": workPhone}
 	workAddr := address{City: "San Jose", Street: "255 E Tasman Drive", Zip: "95134", Phones: phoneMap2}
 
-	addressMap := map[string]address{"home": homeAddr, "work": workAddr}
+	addressMap := map[string]address{"Home": homeAddr, "Work": workAddr}
 
 	var insertUser1 = &user{ID: "user1", Addresses: addressMap}
 	insertErr1 := insertUserTable(db, insertUser1)
@@ -112,13 +112,38 @@ func insertUsers(db sql.Broker) (err error) {
 	return nil
 }
 
+//insertUser used to handle PUT to insert a user in cassandra database
+func insertUser(db sql.Broker, id string) (err error) {
+
+	homePhone := phone{CountryCode: 1, Number: "408-123-1234"}
+	cellPhone := phone{CountryCode: 1, Number: "408-123-1235"}
+	workPhone := phone{CountryCode: 1, Number: "408-123-1236"}
+
+	phoneMap1 := map[string]phone{"Home": homePhone, "Cell": cellPhone}
+	homeAddr := address{City: "San Jose", Street: "123 Tasman Drive", Zip: "95135", Phones: phoneMap1}
+
+	phoneMap2 := map[string]phone{"Work": workPhone}
+	workAddr := address{City: "San Jose", Street: "255 E Tasman Drive", Zip: "95134", Phones: phoneMap2}
+
+	addressMap := map[string]address{"Home": homeAddr, "Work": workAddr}
+
+	var insertUser1 = &user{ID: id, Addresses: addressMap}
+	insertErr1 := insertUserTable(db, insertUser1)
+	if insertErr1 != nil {
+		return insertErr1
+	}
+
+	return nil
+}
+
 //getUserByID used to handle GET for retrieving a user-defined type from cassandra database
-func getUserByID(db sql.Broker, id string) (result *[]user, err error) {
+func getUserByID(db sql.Broker, id string) (result *user, err error) {
 	var UserTable = &user{}
-	users := &[]user{}
+	users := &user{}
 
 	query1 := sql.FROM(UserTable, sql.WHERE(sql.Field(&UserTable.ID, sql.EQ(id))))
-	err = sql.SliceIt(users, db.ListValues(query1))
+	//err = sql.SliceIt(users, db.ListValues(query1))
+	db.GetValue(query1, users)
 
 	return users, nil
 }
@@ -160,12 +185,13 @@ func insertUserTable(db sql.Broker, insertUser *user) (err error) {
 }
 
 //selectByID used to retrieve data from tweet table
-func selectByID(db sql.Broker, id *string) (result *[]tweet, err error) {
+func selectByID(db sql.Broker, id *string) (result *tweet, err error) {
 	var TweetTable = &tweet{}
-	tweets := &[]tweet{}
+	tweets := &tweet{}
 
 	query1 := sql.FROM(TweetTable, sql.WHERE(sql.Field(&TweetTable.ID, sql.EQ(id))))
-	err = sql.SliceIt(tweets, db.ListValues(query1))
+	//err = sql.SliceIt(tweets, db.ListValues(query1))
+	db.GetValue(query1, tweets)
 
 	if err != nil {
 		return nil, err
