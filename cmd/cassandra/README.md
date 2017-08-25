@@ -110,3 +110,37 @@ func (plugin *CassandraRestAPIPlugin) Close() error {
     err1 := db.Put(sql.FieldEQ(&insertTweet.ID), insertTweet)
 ```
 Supported broker [API](https://github.com/ligato/cn-infra/blob/master/db/sql/cassandra/cassa_broker_impl.go)
+
+## How to run micro-service
+
+1. Navigate to the cn-sample-service/cmd/cassandra directory
+2. Run go build
+3. Run go install
+4. Set environment variables
+```
+    export CASSANDRA_HOST=127.0.0.1
+    export CASSANDRA_PORT=9042
+    export CASSANDRA_CONFIG=<configuration file path>
+```
+5. Start the micro-service
+```
+    ./cassandra --cassandra-config=<cassandra.conf.yaml file path>
+```
+6. Start Cassandra locally using docker or your local installation
+```
+    sudo docker run -p 9042:9042 -it --name cassandra01 --rm cassandra:latest
+```
+7. Using curl post HTTP requests
+```
+curl -X POST http://localhost:9191/tweets
+curl -X GET http://localhost:9191/tweets
+curl -X GET http://localhost:9191/tweets/{id}
+curl -X PUT http://localhost:9191/tweets/{id}
+curl -X DELETE http://localhost:9191/tweets/{id}
+curl -X POST http://localhost:9191/users
+curl -X GET http://localhost:9191/users
+curl -X GET http://localhost:9191/users/{id}
+```
+
+
+
