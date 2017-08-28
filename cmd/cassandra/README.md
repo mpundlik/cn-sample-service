@@ -122,13 +122,17 @@ Supported broker [API](https://github.com/ligato/cn-infra/blob/master/db/sql/cas
     export CASSANDRA_PORT=9042
     export CASSANDRA_CONFIG=<configuration file path>
 ```
-5. Start the micro-service
+5. Start the micro-service locally using docker or from local installation (bin directory)
 ```
+    sudo docker run -p 9191:9191 -it --name simple_agent --privileged --rm dev_cn_sample_service bash
+    OR
     ./cassandra --cassandra-config=<cassandra.conf.yaml file path>
 ```
-6. Start Cassandra locally using docker or your local installation
+6. Start Cassandra locally using docker or from local installation (bin directory)
 ```
     sudo docker run -p 9042:9042 -it --name cassandra01 --rm cassandra:latest
+    OR
+    ./cassandra
 ```
 7. Using curl post HTTP requests
 ```
