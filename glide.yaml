@@ -1,4 +1,9 @@
-package: cn-sample-service
+package: github.com/ligato/cn-sample-service
 import:
-- package: github.com/ligato/vpp-agent
-  version: 5b6fbe26c2e4eac81e8d5550041819f98b77d33f
+- package: github.com/ligato/cn-infra
+  version: 7657681a90ee7630248e8bf312dbfae92d82635e
+- package: github.com/Sirupsen/logrus
+  version: v1.0.0
+  repo: https://github.com/sirupsen/logrus.git
+- package: google.golang.org/grpc
+  version: v1.5.1

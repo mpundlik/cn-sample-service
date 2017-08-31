@@ -14,7 +14,6 @@ cache:
 before_install:
   - go get -v github.com/golang/lint/golint
   - go get github.com/mattn/goveralls
-  - sudo ./vendor/github.com/ligato/vpp-agent/scripts/build-vpp.sh
 
 script:
   - make lint

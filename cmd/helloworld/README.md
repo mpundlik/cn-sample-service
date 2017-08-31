@@ -1,23 +1,23 @@
 # HelloWorld
 
-HelloWorld as the name suggest is a simple extension of vpp-agent. It adds a single plugin that creates
+HelloWorld as the name suggest is a simple extension of cn-infra. It adds a single plugin that creates
 a custom logger an logs a message "Hello World!!!". The aim of this example is to list basic steps that
-are necessary in order to integrate a custom plugin to vpp-agent.
+are necessary in order to integrate a custom plugin to cn-infra.
 
 1. Use an existing flavour - collection of plugins
 ```go
-	import "github.com/ligato/vpp-agent/flavours/vpp"
+	import "github.com/ligato/cn-infra/flavors/local"
 
 
-	f := vpp.Flavour{}
+	f := local.FlavorLocal{}
 ```
-Alternatively, you can create a custom [flavour](https://github.com/ligato/vpp-agent/tree/master/flavours).
+Alternatively, you can create a custom [flavour](https://github.com/ligato/cn-infra/tree/master/flavors).
 
 2. Declare a structure for your plugin. Apart from the internal fields the structure must specify
 the dependencies of the plugin.
 
 ```go
-// HelloWorldPlugin is a plugin that showcase the extensibility of vpp agent.
+// HelloWorldPlugin is a plugin that showcase the extensibility of cn-infra.
 type HelloWorldPlugin struct {
 	// LogFactory is a dependency of the plugin that needs to be injected.
 	// This dependency provides an API to create a logger instance
