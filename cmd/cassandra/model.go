@@ -16,7 +16,7 @@ package main
 
 //phone struct used to create customized type in Cassandra
 type phone struct {
-	CountryCode int    `cql:"countryCode"`
+	CountryCode int    `cql:"country_code"`
 	Number      string `cql:"number"`
 }
 
@@ -40,11 +40,4 @@ type tweet struct {
 	Timeline string `cql:"timeline"`
 	Text     string `cql:"text"`
 	User     string `cql:"user"`
-}
-
-//person struct used to represent person table (id text, name text, data text, PRIMARY KEY(id)) in Cassandra.
-type person struct {
-	ID   string `cql:"id" pk:"id"`
-	Name string `cql:"name"`
-	Data string `cql:"data"`
 }
