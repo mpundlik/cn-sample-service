@@ -46,18 +46,20 @@ type CassandraRestAPIPlugin struct {
 	Deps
 
 	// broker stores the cassandra data broker
-	broker sql.Broker
+	broker          sql.Broker
+	pluginCompleted chan struct{}
 }
 
 //main entry point for the sample service
 func main() {
-
+	pluginCompleted := make(chan struct{}, 1)
 	flavor := CassandraRestFlavor{}
+	flavor.CassandraRestAPIPlugin.pluginCompleted = pluginCompleted
 
 	// Create new agent
 	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(flavor.Plugins())...)
 
-	err := core.EventLoopWithInterrupt(agent, nil)
+	err := core.EventLoopWithInterrupt(agent, pluginCompleted)
 	if err != nil {
 		logroot.StandardLogger().Errorf("Error in event loop %v", err)
 		os.Exit(1)
@@ -100,6 +102,8 @@ func (plugin *CassandraRestAPIPlugin) Close() error {
 	if err != nil {
 		return err
 	}
+
+	plugin.pluginCompleted <- struct{}{}
 
 	return nil
 }
