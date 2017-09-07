@@ -48,6 +48,8 @@ type CassandraRestAPIPlugin struct {
 	// broker stores the cassandra data broker
 	broker          sql.Broker
 	pluginCompleted chan struct{}
+	tweetTable      *tweet
+	userTable       *user
 }
 
 //main entry point for the sample service
@@ -76,6 +78,9 @@ func (plugin *CassandraRestAPIPlugin) AfterInit() error {
 	plugin.Log.Info("Cassandra REST API Plugin is up and running !!!")
 
 	plugin.broker = plugin.BrokerPlugin.NewBroker()
+
+	plugin.tweetTable = &tweet{}
+	plugin.userTable = &user{}
 
 	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsGetHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsGetHandler, "GET")

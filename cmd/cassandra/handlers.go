@@ -28,7 +28,7 @@ func (plugin *CassandraRestAPIPlugin) tweetsGetHandler(formatter *render.Render)
 		if pathParams != nil && len(pathParams) > 0 {
 			id := pathParams["id"]
 			if id != "" {
-				result, err := getTweetByID(plugin.broker, id)
+				result, err := getTweetByID(plugin.broker, plugin.tweetTable, id)
 
 				if err != nil {
 					formatter.JSON(w, http.StatusInternalServerError, err.Error())
@@ -44,7 +44,7 @@ func (plugin *CassandraRestAPIPlugin) tweetsGetHandler(formatter *render.Render)
 				formatter.JSON(w, http.StatusBadRequest, errors.New("id is nil"))
 			}
 		} else {
-			result, err := getAllTweets(plugin.broker)
+			result, err := getAllTweets(plugin.broker, plugin.tweetTable)
 
 			if err != nil {
 				formatter.JSON(w, http.StatusInternalServerError, err.Error())
@@ -81,7 +81,7 @@ func (plugin *CassandraRestAPIPlugin) tweetsPutHandler(formatter *render.Render)
 //tweetsPostHandler defining route handler which performs gets all tweets from cassandra database
 func (plugin *CassandraRestAPIPlugin) tweetsPostHandler(formatter *render.Render) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		result, err := getAllTweets(plugin.broker)
+		result, err := getAllTweets(plugin.broker, plugin.tweetTable)
 
 		if err != nil {
 			formatter.JSON(w, http.StatusInternalServerError, err.Error())
@@ -99,14 +99,14 @@ func (plugin *CassandraRestAPIPlugin) tweetsDeleteHandler(formatter *render.Rend
 			id := pathParams["id"]
 			if id != "" {
 
-				tweet, err := getTweetByID(plugin.broker, id)
+				tweet, err := getTweetByID(plugin.broker, plugin.tweetTable, id)
 				if err != nil {
 					formatter.JSON(w, http.StatusInternalServerError, err.Error())
 				}
 
 				if tweet != nil && tweet.ID != "" {
 
-					err = deleteTweetByID(plugin.broker, id)
+					err = deleteTweetByID(plugin.broker, plugin.tweetTable, id)
 
 					if err != nil {
 						formatter.JSON(w, http.StatusInternalServerError, err.Error())
@@ -133,7 +133,7 @@ func (plugin *CassandraRestAPIPlugin) usersGetHandler(formatter *render.Render) 
 		if pathParams != nil && len(pathParams) > 0 {
 			id := pathParams["id"]
 			if id != "" {
-				result, err := getUserByID(plugin.broker, id)
+				result, err := getUserByID(plugin.broker, plugin.userTable, id)
 
 				if err != nil {
 					formatter.JSON(w, http.StatusInternalServerError, err.Error())
@@ -148,7 +148,7 @@ func (plugin *CassandraRestAPIPlugin) usersGetHandler(formatter *render.Render) 
 				formatter.JSON(w, http.StatusBadRequest, errors.New("id is nil"))
 			}
 		} else {
-			result, err := getAllUsers(plugin.broker)
+			result, err := getAllUsers(plugin.broker, plugin.userTable)
 
 			if err != nil {
 				formatter.JSON(w, http.StatusInternalServerError, err.Error())
@@ -163,7 +163,7 @@ func (plugin *CassandraRestAPIPlugin) usersGetHandler(formatter *render.Render) 
 func (plugin *CassandraRestAPIPlugin) usersPostHandler(formatter *render.Render) http.HandlerFunc {
 
 	return func(w http.ResponseWriter, req *http.Request) {
-		result, err := getAllUsers(plugin.broker)
+		result, err := getAllUsers(plugin.broker, plugin.userTable)
 
 		if err != nil {
 			formatter.JSON(w, http.StatusInternalServerError, err.Error())

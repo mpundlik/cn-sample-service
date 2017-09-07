@@ -18,12 +18,6 @@ import (
 	"github.com/ligato/cn-infra/db/sql"
 )
 
-//TweetTable used to represent the tweet table
-var TweetTable = &tweet{}
-
-//UserTable used to represent the user table
-var UserTable = &user{}
-
 //insertTweet used to handle PUT to insert a tweet in cassandra database
 func insertTweet(db sql.Broker, id string) (err error) {
 
@@ -37,11 +31,11 @@ func insertTweet(db sql.Broker, id string) (err error) {
 }
 
 //getAllTweets used to handle GET to get all tweets from cassandra database
-func getAllTweets(db sql.Broker) (result *[]tweetResource, err error) {
+func getAllTweets(db sql.Broker, tweetTable *tweet) (result *[]tweetResource, err error) {
 
 	var tweets = &[]tweetResource{}
 
-	query2 := sql.FROM(TweetTable, nil)
+	query2 := sql.FROM(tweetTable, nil)
 	err = sql.SliceIt(tweets, db.ListValues(query2))
 
 	if err != nil {
@@ -52,11 +46,11 @@ func getAllTweets(db sql.Broker) (result *[]tweetResource, err error) {
 }
 
 //getTweetByID used to handle GET to get a tweet by ID from cassandra database
-func getTweetByID(db sql.Broker, id string) (result *tweetResource, err error) {
+func getTweetByID(db sql.Broker, tweetTable *tweet, id string) (result *tweetResource, err error) {
 
 	tweet := &tweetResource{}
 
-	query1 := sql.FROM(TweetTable, sql.WHERE(sql.Field(&TweetTable.ID, sql.EQ(id))))
+	query1 := sql.FROM(tweetTable, sql.WHERE(sql.Field(&tweetTable.ID, sql.EQ(id))))
 	_, err = db.GetValue(query1, tweet)
 
 	if err != nil {
@@ -67,9 +61,9 @@ func getTweetByID(db sql.Broker, id string) (result *tweetResource, err error) {
 }
 
 //deleteTweetByID used to handle DELETE to delete a tweet from cassandra database
-func deleteTweetByID(db sql.Broker, id string) (err error) {
+func deleteTweetByID(db sql.Broker, tweetTable *tweet, id string) (err error) {
 
-	err = db.Delete(sql.FROM(TweetTable, sql.WHERE(sql.Field(&TweetTable.ID, sql.EQ(id)))))
+	err = db.Delete(sql.FROM(tweetTable, sql.WHERE(sql.Field(&tweetTable.ID, sql.EQ(id)))))
 
 	if err != nil {
 		return err
@@ -103,10 +97,10 @@ func insertUser(db sql.Broker, id string) (err error) {
 }
 
 //getUserByID used to handle GET for retrieving a user-defined type from cassandra database
-func getUserByID(db sql.Broker, id string) (result *userResource, err error) {
+func getUserByID(db sql.Broker, userTable *user, id string) (result *userResource, err error) {
 	user := &userResource{}
 
-	query1 := sql.FROM(UserTable, sql.WHERE(sql.Field(&UserTable.ID, sql.EQ(id))))
+	query1 := sql.FROM(userTable, sql.WHERE(sql.Field(&userTable.ID, sql.EQ(id))))
 	_, err = db.GetValue(query1, user)
 
 	if err != nil {
@@ -117,10 +111,10 @@ func getUserByID(db sql.Broker, id string) (result *userResource, err error) {
 }
 
 //getAllUsers used to handle GET for retrieving all entries for a user-defined type from cassandra database
-func getAllUsers(db sql.Broker) (result *[]userResource, err error) {
+func getAllUsers(db sql.Broker, userTable *user) (result *[]userResource, err error) {
 	users := &[]userResource{}
 
-	query1 := sql.FROM(UserTable, sql.Exp(""))
+	query1 := sql.FROM(userTable, sql.Exp(""))
 	err = sql.SliceIt(users, db.ListValues(query1))
 
 	if err != nil {
