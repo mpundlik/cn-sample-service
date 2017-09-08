@@ -15,6 +15,7 @@
 package main
 
 import (
+	"errors"
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/sql"
 	"github.com/ligato/cn-infra/db/sql/cassandra"
@@ -45,18 +46,22 @@ type CassandraRestAPIPlugin struct {
 	Deps
 
 	// broker stores the cassandra data broker
-	broker sql.Broker
+	broker          sql.Broker
+	pluginCompleted chan struct{}
+	tweetTable      *tweet
+	userTable       *user
 }
 
 //main entry point for the sample service
 func main() {
-
+	pluginCompleted := make(chan struct{}, 1)
 	flavor := CassandraRestFlavor{}
+	flavor.CassandraRestAPIPlugin.pluginCompleted = pluginCompleted
 
 	// Create new agent
 	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(flavor.Plugins())...)
 
-	err := core.EventLoopWithInterrupt(agent, nil)
+	err := core.EventLoopWithInterrupt(agent, pluginCompleted)
 	if err != nil {
 		logroot.StandardLogger().Errorf("Error in event loop %v", err)
 		os.Exit(1)
@@ -73,6 +78,9 @@ func (plugin *CassandraRestAPIPlugin) AfterInit() error {
 	plugin.Log.Info("Cassandra REST API Plugin is up and running !!!")
 
 	plugin.broker = plugin.BrokerPlugin.NewBroker()
+
+	plugin.tweetTable = &tweet{}
+	plugin.userTable = &user{}
 
 	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets", plugin.tweetsGetHandler, "GET")
 	plugin.HTTPHandlers.RegisterHTTPHandler("/tweets/{id}", plugin.tweetsGetHandler, "GET")
@@ -100,48 +108,53 @@ func (plugin *CassandraRestAPIPlugin) Close() error {
 		return err
 	}
 
+	plugin.pluginCompleted <- struct{}{}
+
 	return nil
 }
 
 //setup used to setup Cassandra before running each request
 func (plugin *CassandraRestAPIPlugin) setup() (err error) {
-	db := plugin.broker
+	if plugin.broker == nil {
+		plugin.Log.Errorf("Cassandra broker is nil")
+		return errors.New("Cassandra broker is nil")
+	}
 
-	err1 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
+	err1 := plugin.broker.Exec(`CREATE KEYSPACE IF NOT EXISTS example with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
 	if err1 != nil {
-		logroot.StandardLogger().Errorf("Error creating keyspace %v", err1)
+		plugin.Log.Errorf("Error creating keyspace %v", err1)
 		return err1
 	}
 
-	err2 := db.Exec(`CREATE TABLE IF NOT EXISTS example.tweet(timeline text, id text, text text, user text, PRIMARY KEY(id))`)
+	err2 := plugin.broker.Exec(`CREATE TABLE IF NOT EXISTS example.tweet(timeline text, id text, text text, user text, PRIMARY KEY(id))`)
 	if err2 != nil {
-		logroot.StandardLogger().Errorf("Error creating table %v", err2)
+		plugin.Log.Errorf("Error creating table %v", err2)
 		return err2
 	}
 
-	err4 := db.Exec(`CREATE INDEX IF NOT EXISTS ON example.tweet(timeline)`)
+	err4 := plugin.broker.Exec(`CREATE INDEX IF NOT EXISTS ON example.tweet(timeline)`)
 	if err4 != nil {
-		logroot.StandardLogger().Errorf("Error creating index %v", err4)
+		plugin.Log.Errorf("Error creating index %v", err4)
 		return err4
 	}
 
-	err5 := db.Exec(`CREATE KEYSPACE IF NOT EXISTS example2 with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
+	err5 := plugin.broker.Exec(`CREATE KEYSPACE IF NOT EXISTS example2 with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
 	if err5 != nil {
-		logroot.StandardLogger().Errorf("Error creating keyspace %v", err5)
+		plugin.Log.Errorf("Error creating keyspace %v", err5)
 		return err5
 	}
 
-	err6 := db.Exec(`CREATE TYPE IF NOT EXISTS example2.phone (
+	err6 := plugin.broker.Exec(`CREATE TYPE IF NOT EXISTS example2.phone (
 			countryCode int,
 			number text,
 		)`)
 
 	if err6 != nil {
-		logroot.StandardLogger().Errorf("Error creating user-defined type phone %v", err6)
+		plugin.Log.Errorf("Error creating user-defined type phone %v", err6)
 		return err6
 	}
 
-	err7 := db.Exec(`CREATE TYPE IF NOT EXISTS example2.address (
+	err7 := plugin.broker.Exec(`CREATE TYPE IF NOT EXISTS example2.address (
 			street text,
 			city text,
 			zip text,
@@ -153,13 +166,13 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 		return err7
 	}
 
-	err8 := db.Exec(`CREATE TABLE IF NOT EXISTS example2.user (
+	err8 := plugin.broker.Exec(`CREATE TABLE IF NOT EXISTS example2.user (
 			ID text PRIMARY KEY,
 			addresses map<text, frozen<address>>
 		)`)
 
 	if err8 != nil {
-		logroot.StandardLogger().Errorf("Error creating table user %v", err8)
+		plugin.Log.Errorf("Error creating table user %v", err8)
 		return err8
 	}
 
@@ -169,41 +182,44 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 //teardown used to clean up tables/schema from cassandra
 func (plugin *CassandraRestAPIPlugin) teardown() (err error) {
 
-	db := plugin.broker
+	if plugin.broker == nil {
+		plugin.Log.Errorf("Cassandra broker is nil")
+		return errors.New("Cassandra broker is nil")
+	}
 
-	err1 := db.Exec(`DROP TABLE IF EXISTS example.tweet`)
+	err1 := plugin.broker.Exec(`DROP TABLE IF EXISTS example.tweet`)
 	if err1 != nil {
-		logroot.StandardLogger().Errorf("Error dropping table %v", err1)
+		plugin.Log.Errorf("Error dropping table %v", err1)
 		return err1
 	}
 
-	err2 := db.Exec(`DROP TABLE IF EXISTS example2.user`)
+	err2 := plugin.broker.Exec(`DROP TABLE IF EXISTS example2.user`)
 	if err2 != nil {
-		logroot.StandardLogger().Errorf("Error dropping table %v", err2)
+		plugin.Log.Errorf("Error dropping table %v", err2)
 		return err2
 	}
 
-	err3 := db.Exec(`DROP TYPE IF EXISTS example2.address`)
+	err3 := plugin.broker.Exec(`DROP TYPE IF EXISTS example2.address`)
 	if err3 != nil {
-		logroot.StandardLogger().Errorf("Error dropping type %v", err3)
+		plugin.Log.Errorf("Error dropping type %v", err3)
 		return err3
 	}
 
-	err4 := db.Exec(`DROP TYPE IF EXISTS example2.phone`)
+	err4 := plugin.broker.Exec(`DROP TYPE IF EXISTS example2.phone`)
 	if err4 != nil {
-		logroot.StandardLogger().Errorf("Error dropping type %v", err4)
+		plugin.Log.Errorf("Error dropping type %v", err4)
 		return err4
 	}
 
-	err5 := db.Exec(`DROP KEYSPACE IF EXISTS example`)
+	err5 := plugin.broker.Exec(`DROP KEYSPACE IF EXISTS example`)
 	if err5 != nil {
-		logroot.StandardLogger().Errorf("Error dropping keyspace %v", err5)
+		plugin.Log.Errorf("Error dropping keyspace %v", err5)
 		return err5
 	}
 
-	err6 := db.Exec(`DROP KEYSPACE IF EXISTS example2`)
+	err6 := plugin.broker.Exec(`DROP KEYSPACE IF EXISTS example2`)
 	if err6 != nil {
-		logroot.StandardLogger().Errorf("Error dropping keyspace %v", err6)
+		plugin.Log.Errorf("Error dropping keyspace %v", err6)
 		return err6
 	}
 
