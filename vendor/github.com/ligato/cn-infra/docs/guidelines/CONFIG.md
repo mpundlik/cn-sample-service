@@ -2,9 +2,9 @@
 
 ## Flags & Environment variables
 
-1. Ligato source code uses [flag](https://github.com/namsral/flag) package to define & parse command 
-   line flags and/or environment variables. Plan is to incorporate
-   [Viper](https://github.com/spf13/viper)
+1. Ligato source code uses [flag](https://github.com/namsral/flag)
+   package to define & parse command line flags and/or environment
+   variables. Plan is to incorporate [Viper](https://github.com/spf13/viper)
    that is backward compatible with golang flag package. 
 
 2. The package level init() function defines one or more flags. If the 
@@ -55,8 +55,10 @@ files. Flags can be used to specify the name of the configuration file.
     }  
 ```
 
-2. Each plugin can have its own configuration (injected in [flavor](PLUGIN_FLAVORS.md))
-   See following [Simple flag example](#Simple flag example) and [Complex configuration example](#Complex configuration example) 
+2. Each plugin can have its own configuration
+   (injected in [flavor](PLUGIN_FLAVORS.md))
+   See following [Simple flag example](#Simple flag example) and
+   [Complex configuration example](#Complex configuration example)
 
 ### Simple flag example
 ```go
@@ -88,7 +90,7 @@ files. Flags can be used to specify the name of the configuration file.
     package xy
 
     import (
-    "github.com/ligato/cn-infra/flavors/localdeps"
+    "github.com/ligato/cn-infra/flavors/local"
     )
     
     type ConfigXY struct {
@@ -101,7 +103,7 @@ files. Flags can be used to specify the name of the configuration file.
     }
     
     type Dep struct {
-        localdeps.PluginInfraDeps //(config name is derived from plugin name)    
+        local.PluginInfraDeps //(config name is derived from plugin name)    
         //other fields...
     }
     
