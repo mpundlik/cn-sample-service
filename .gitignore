@@ -1,6 +1,7 @@
 .idea/
 glide.lock
 cmd/helloworld/helloworld
+cmd/cassandra/cassandra
 
 #---------
 # eclipse

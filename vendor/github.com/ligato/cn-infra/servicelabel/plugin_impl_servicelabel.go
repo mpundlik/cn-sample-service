@@ -17,6 +17,7 @@ package servicelabel
 import (
 	"fmt"
 
+	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/namsral/flag"
 )
 
@@ -25,6 +26,13 @@ type Plugin struct {
 	// MicroserviceLabel identifies particular VNF.
 	// Used primarily as a key prefix to ETCD data store.
 	MicroserviceLabel string
+}
+
+// OfDifferentAgent sets micorserivce label and returns new instance of Plugin.
+// It is meant for watching DB by prefix of different agent. You can pass/inject
+// instance of this plugin for example to kvdbsync.
+func OfDifferentAgent(microserviceLabel string) *Plugin {
+	return &Plugin{MicroserviceLabel: microserviceLabel}
 }
 
 var microserviceLabelFlag string
@@ -38,6 +46,7 @@ func (p *Plugin) Init() error {
 	if p.MicroserviceLabel == "" {
 		p.MicroserviceLabel = microserviceLabelFlag
 	}
+	logroot.StandardLogger().Debugf("Microservice label is set to %v", p.MicroserviceLabel)
 	return nil
 }
 
