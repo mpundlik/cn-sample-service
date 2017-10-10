@@ -19,7 +19,7 @@ import (
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/sql"
 	"github.com/ligato/cn-infra/db/sql/cassandra"
-	"github.com/ligato/cn-infra/flavors/localdeps"
+	"github.com/ligato/cn-infra/flavors/local"
 	"github.com/ligato/cn-infra/flavors/rpc"
 	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/ligato/cn-infra/rpc/rest"
@@ -30,7 +30,7 @@ import (
 
 type Deps struct {
 	// httpmux is a dependency of the plugin that needs to be injected.
-	localdeps.PluginLogDeps
+	local.PluginLogDeps
 	HTTPHandlers rest.HTTPHandlers
 	BrokerPlugin sql.BrokerPlugin
 }

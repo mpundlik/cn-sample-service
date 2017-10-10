@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package logroot contains default global logger.
+// Package logroot contains the default global logger.
 package logroot
 
 import (
@@ -20,7 +20,7 @@ import (
 	"github.com/ligato/cn-infra/logging/logrus"
 )
 
-// StandardLogger returns a global logger. Please notice, that recommended
+// StandardLogger returns a global default logger. Please notice, that recommended
 // approach is to create a custom logger.
 func StandardLogger() logging.Logger {
 	return logrus.DefaultLogger()

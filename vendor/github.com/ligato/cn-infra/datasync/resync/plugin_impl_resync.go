@@ -18,7 +18,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ligato/cn-infra/flavors/localdeps"
+	"github.com/ligato/cn-infra/flavors/local"
 )
 
 // Plugin implements Plugin interface therefore can be loaded with other plugins
@@ -29,10 +29,10 @@ type Plugin struct {
 	access        sync.Mutex
 }
 
-// Deps is here to group injected dependencies of plugin
-// to not mix with other plugin fields.
+// Deps groups dependencies injected into the plugin so that they are
+// logically separated from other plugin fields.
 type Deps struct {
-	localdeps.PluginLogDeps // inject
+	local.PluginLogDeps // inject
 }
 
 // Init initializes variables
@@ -48,7 +48,6 @@ func (plugin *Plugin) Init() (err error) {
 
 // AfterInit method starts the resync
 func (plugin *Plugin) AfterInit() (err error) {
-	//plugin.startingResync()
 	plugin.startResync()
 
 	return nil
@@ -85,16 +84,27 @@ func (plugin *Plugin) Register(resyncName string) Registration {
 
 // call callback on plugins to create/delete/modify objects
 func (plugin *Plugin) startResync() {
-	for regName, reg := range plugin.registrations {
-		started := newStatusEvent(Started)
-		reg.StatusChan() <- started
 
-		select {
-		case <-started.ReceiveAck():
-		case <-time.After(5 * time.Second):
-			plugin.Log.WithField("regName", regName).Warn("Timeout of ACK")
-		}
+	startTime := time.Now()
+	for regName, reg := range plugin.registrations {
+		resyncPartStart := time.Now()
+
+		plugin.startSingleResync(regName, reg)
+
+		resyncPart := time.Since(resyncPartStart)
+		plugin.Log.WithField("durationInNs", resyncPart.Nanoseconds()).Info("Resync of ", regName, " took ", resyncPart)
 	}
 
+	resyncTime := time.Since(startTime)
+	plugin.Log.WithField("durationInNs", resyncTime.Nanoseconds()).Info("Resync took ", resyncTime)
 	// TODO check if there ReportError (if not than report) if error occurred even during Resync
+}
+func (plugin *Plugin) startSingleResync(resyncName string, reg Registration) {
+	started := newStatusEvent(Started)
+	reg.StatusChan() <- started
+	select {
+	case <-started.ReceiveAck():
+	case <-time.After(5 * time.Second):
+		plugin.Log.WithField("regName", resyncName).Warn("Timeout of ACK")
+	}
 }
