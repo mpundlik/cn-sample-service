@@ -95,17 +95,17 @@ func (plugin *TopologyPlugin) Close() error {
 }
 
 func (plugin *TopologyPlugin) buildData() {
-	var ip1 = model.IPAdress{Ip: "127.0.0.1"}
-	var ip2 = model.IPAdress{Ip: "127.0.0.2"}
-	var ip3 = model.IPAdress{Ip: "127.0.0.3"}
-	var ip4 = model.IPAdress{Ip: "127.0.0.4"}
-	var if1 = model.Interface{Name: "interface1"}
-	var if2 = model.Interface{Name: "interface2"}
-	var tap1 = model.Tap{Name: "tap1", Mac: "00:00:00:00:00:00", IpAdresses: []*model.IPAdress{&ip1, &ip2}}
-	var tap2 = model.Tap{Name: "tap2", Mac: "00:00:ff:00:00:00", IpAdresses: []*model.IPAdress{&ip4, &ip3}}
+	var ip1 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.1"}
+	var ip2 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.2"}
+	var ip3 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.3"}
+	var ip4 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.4"}
+	var tap1 = model.Topology_Interface_Tap{Mac: "00:00:00:00:00:00", IpAdresses: []*model.Topology_Interface_Tap_IPAdress{&ip1, &ip2}}
+	var tap2 = model.Topology_Interface_Tap{Mac: "00:00:ff:00:00:00", IpAdresses: []*model.Topology_Interface_Tap_IPAdress{&ip4, &ip3}}
+	var if1 = model.Topology_Interface{Name: "interface1", Tap:&tap1}
+	var if2 = model.Topology_Interface{Name: "interface2", Tap:&tap2}
 	plugin.data = model.Topology{
-		Bridge: &model.Bridge{Name: "bridge1", Interfaces: []*model.Interface{&if1, &if2}},
-		Taps:   []*model.Tap{&tap1, &tap2},
+		Name: "topology",
+		Interfaces:[]*model.Topology_Interface{&if1, &if2},
 	}
 }
 

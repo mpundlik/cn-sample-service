@@ -79,30 +79,26 @@ syntax = "proto3";
 
 package model;
 
-message IPAdress {
-    string ip = 1;
-}
-
-message Interface {
-    string name = 1;
-}
-
-message Tap {
-    string name = 1;
-    string mac = 2;
-    repeated IPAdress ip_adresses = 3;
-}
-
-message Bridge {
-    string name = 1;
-    repeated Interface interfaces = 2;
-}
-
 message Topology {
+    string name = 1;
 
-    Bridge bridge = 1;
-    repeated Tap taps = 2;
+    message Interface {
+        string name = 1;
 
+        message Tap {
+            string mac = 1;
+
+            message IPAdress {
+                string ip = 1;
+            }
+            
+            repeated IPAdress ip_adresses = 2;
+        }
+        
+        Tap tap = 2;
+    }
+    
+    repeated Interface interfaces = 2;
 }
 ```
 
@@ -119,17 +115,17 @@ the file topology.pb.go should be created. Now some functions needs to be added.
 
 ```go
 func (plugin *TopologyPlugin) buildData() *model.Topology {
-	var ip1 = model.IPAdress{Ip:"127.0.0.1"}
-	var ip2 = model.IPAdress{Ip:"127.0.0.2"}
-	var ip3 = model.IPAdress{Ip:"127.0.0.3"}
-	var ip4 = model.IPAdress{Ip:"127.0.0.4"}
-	var if1 = model.Interface{Name:"interface1"}
-	var if2 = model.Interface{Name:"interface2"}
-	var tap1 = model.Tap{Name:"tap1", Mac:"00:00:00:00:00:00", IpAdresses:[]*model.IPAdress{&ip1, &ip2}}
-	var tap2 = model.Tap{Name:"tap2", Mac:"00:00:ff:00:00:00", IpAdresses:[]*model.IPAdress{&ip4, &ip3}}
-	return &model.Topology{
-		Bridge:&model.Bridge{Name:"bridge1", Interfaces:[]*model.Interface{&if1, &if2}},
-		Taps:[]*model.Tap{&tap1, &tap2},
+	var ip1 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.1"}
+	var ip2 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.2"}
+	var ip3 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.3"}
+	var ip4 = model.Topology_Interface_Tap_IPAdress{Ip: "127.0.0.4"}
+	var tap1 = model.Topology_Interface_Tap{Mac: "00:00:00:00:00:00", IpAdresses: []*model.Topology_Interface_Tap_IPAdress{&ip1, &ip2}}
+	var tap2 = model.Topology_Interface_Tap{Mac: "00:00:ff:00:00:00", IpAdresses: []*model.Topology_Interface_Tap_IPAdress{&ip4, &ip3}}
+	var if1 = model.Topology_Interface{Name: "interface1", Tap:&tap1}
+	var if2 = model.Topology_Interface{Name: "interface2", Tap:&tap2}
+	plugin.data = model.Topology{
+		Name: "topology",
+		Interfaces:[]*model.Topology_Interface{&if1, &if2},
 	}
 }
 

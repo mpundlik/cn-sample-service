@@ -8,10 +8,6 @@ It is generated from these files:
 	topology.proto
 
 It has these top-level messages:
-	IPAdress
-	Interface
-	Tap
-	Bridge
 	Topology
 */
 package model
@@ -31,143 +27,119 @@ var _ = math.Inf
 // proto package needs to be updated.
 const _ = proto.ProtoPackageIsVersion2 // please upgrade the proto package
 
-type IPAdress struct {
-	Ip string `protobuf:"bytes,1,opt,name=ip" json:"ip,omitempty"`
+type Topology struct {
+	Name       string                `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Interfaces []*Topology_Interface `protobuf:"bytes,2,rep,name=interfaces" json:"interfaces,omitempty"`
 }
 
-func (m *IPAdress) Reset()                    { *m = IPAdress{} }
-func (m *IPAdress) String() string            { return proto.CompactTextString(m) }
-func (*IPAdress) ProtoMessage()               {}
-func (*IPAdress) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
+func (m *Topology) Reset()                    { *m = Topology{} }
+func (m *Topology) String() string            { return proto.CompactTextString(m) }
+func (*Topology) ProtoMessage()               {}
+func (*Topology) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0} }
 
-func (m *IPAdress) GetIp() string {
-	if m != nil {
-		return m.Ip
-	}
-	return ""
-}
-
-type Interface struct {
-	Name string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-}
-
-func (m *Interface) Reset()                    { *m = Interface{} }
-func (m *Interface) String() string            { return proto.CompactTextString(m) }
-func (*Interface) ProtoMessage()               {}
-func (*Interface) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{1} }
-
-func (m *Interface) GetName() string {
+func (m *Topology) GetName() string {
 	if m != nil {
 		return m.Name
 	}
 	return ""
 }
 
-type Tap struct {
-	Name       string      `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Mac        string      `protobuf:"bytes,2,opt,name=mac" json:"mac,omitempty"`
-	IpAdresses []*IPAdress `protobuf:"bytes,3,rep,name=ip_adresses,json=ipAdresses" json:"ip_adresses,omitempty"`
-}
-
-func (m *Tap) Reset()                    { *m = Tap{} }
-func (m *Tap) String() string            { return proto.CompactTextString(m) }
-func (*Tap) ProtoMessage()               {}
-func (*Tap) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{2} }
-
-func (m *Tap) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
-func (m *Tap) GetMac() string {
-	if m != nil {
-		return m.Mac
-	}
-	return ""
-}
-
-func (m *Tap) GetIpAdresses() []*IPAdress {
-	if m != nil {
-		return m.IpAdresses
-	}
-	return nil
-}
-
-type Bridge struct {
-	Name       string       `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	Interfaces []*Interface `protobuf:"bytes,2,rep,name=interfaces" json:"interfaces,omitempty"`
-}
-
-func (m *Bridge) Reset()                    { *m = Bridge{} }
-func (m *Bridge) String() string            { return proto.CompactTextString(m) }
-func (*Bridge) ProtoMessage()               {}
-func (*Bridge) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{3} }
-
-func (m *Bridge) GetName() string {
-	if m != nil {
-		return m.Name
-	}
-	return ""
-}
-
-func (m *Bridge) GetInterfaces() []*Interface {
+func (m *Topology) GetInterfaces() []*Topology_Interface {
 	if m != nil {
 		return m.Interfaces
 	}
 	return nil
 }
 
-type Topology struct {
-	Bridge *Bridge `protobuf:"bytes,1,opt,name=bridge" json:"bridge,omitempty"`
-	Taps   []*Tap  `protobuf:"bytes,2,rep,name=taps" json:"taps,omitempty"`
+type Topology_Interface struct {
+	Name string                  `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	Tap  *Topology_Interface_Tap `protobuf:"bytes,2,opt,name=tap" json:"tap,omitempty"`
 }
 
-func (m *Topology) Reset()                    { *m = Topology{} }
-func (m *Topology) String() string            { return proto.CompactTextString(m) }
-func (*Topology) ProtoMessage()               {}
-func (*Topology) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
+func (m *Topology_Interface) Reset()                    { *m = Topology_Interface{} }
+func (m *Topology_Interface) String() string            { return proto.CompactTextString(m) }
+func (*Topology_Interface) ProtoMessage()               {}
+func (*Topology_Interface) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0} }
 
-func (m *Topology) GetBridge() *Bridge {
+func (m *Topology_Interface) GetName() string {
 	if m != nil {
-		return m.Bridge
+		return m.Name
+	}
+	return ""
+}
+
+func (m *Topology_Interface) GetTap() *Topology_Interface_Tap {
+	if m != nil {
+		return m.Tap
 	}
 	return nil
 }
 
-func (m *Topology) GetTaps() []*Tap {
+type Topology_Interface_Tap struct {
+	Mac        string                             `protobuf:"bytes,1,opt,name=mac" json:"mac,omitempty"`
+	IpAdresses []*Topology_Interface_Tap_IPAdress `protobuf:"bytes,2,rep,name=ip_adresses,json=ipAdresses" json:"ip_adresses,omitempty"`
+}
+
+func (m *Topology_Interface_Tap) Reset()                    { *m = Topology_Interface_Tap{} }
+func (m *Topology_Interface_Tap) String() string            { return proto.CompactTextString(m) }
+func (*Topology_Interface_Tap) ProtoMessage()               {}
+func (*Topology_Interface_Tap) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{0, 0, 0} }
+
+func (m *Topology_Interface_Tap) GetMac() string {
 	if m != nil {
-		return m.Taps
+		return m.Mac
+	}
+	return ""
+}
+
+func (m *Topology_Interface_Tap) GetIpAdresses() []*Topology_Interface_Tap_IPAdress {
+	if m != nil {
+		return m.IpAdresses
 	}
 	return nil
+}
+
+type Topology_Interface_Tap_IPAdress struct {
+	Ip string `protobuf:"bytes,1,opt,name=ip" json:"ip,omitempty"`
+}
+
+func (m *Topology_Interface_Tap_IPAdress) Reset()         { *m = Topology_Interface_Tap_IPAdress{} }
+func (m *Topology_Interface_Tap_IPAdress) String() string { return proto.CompactTextString(m) }
+func (*Topology_Interface_Tap_IPAdress) ProtoMessage()    {}
+func (*Topology_Interface_Tap_IPAdress) Descriptor() ([]byte, []int) {
+	return fileDescriptor0, []int{0, 0, 0, 0}
+}
+
+func (m *Topology_Interface_Tap_IPAdress) GetIp() string {
+	if m != nil {
+		return m.Ip
+	}
+	return ""
 }
 
 func init() {
-	proto.RegisterType((*IPAdress)(nil), "model.IPAdress")
-	proto.RegisterType((*Interface)(nil), "model.Interface")
-	proto.RegisterType((*Tap)(nil), "model.Tap")
-	proto.RegisterType((*Bridge)(nil), "model.Bridge")
 	proto.RegisterType((*Topology)(nil), "model.Topology")
+	proto.RegisterType((*Topology_Interface)(nil), "model.Topology.Interface")
+	proto.RegisterType((*Topology_Interface_Tap)(nil), "model.Topology.Interface.Tap")
+	proto.RegisterType((*Topology_Interface_Tap_IPAdress)(nil), "model.Topology.Interface.Tap.IPAdress")
 }
 
 func init() { proto.RegisterFile("topology.proto", fileDescriptor0) }
 
 var fileDescriptor0 = []byte{
-	// 230 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x90, 0x41, 0x4b, 0xc3, 0x40,
-	0x10, 0x85, 0x69, 0x52, 0x43, 0xfb, 0x82, 0xb5, 0xcc, 0x29, 0x78, 0xd0, 0xb2, 0x20, 0xf4, 0x14,
-	0x4a, 0xfd, 0x05, 0xf5, 0xd6, 0x8b, 0xe8, 0x92, 0xab, 0xc8, 0xb6, 0x59, 0xcb, 0x42, 0xd3, 0x1d,
-	0xb2, 0x7b, 0xf1, 0xdf, 0x8b, 0xe3, 0x2e, 0x78, 0xe8, 0x6d, 0x98, 0xf7, 0xe6, 0x7b, 0x8f, 0xc1,
-	0x22, 0x7a, 0xf6, 0x67, 0x7f, 0xfa, 0x6e, 0x79, 0xf4, 0xd1, 0xd3, 0xcd, 0xe0, 0x7b, 0x7b, 0x56,
-	0xf7, 0x98, 0xed, 0xdf, 0x76, 0xfd, 0x68, 0x43, 0xa0, 0x05, 0x0a, 0xc7, 0xcd, 0x64, 0x35, 0x59,
-	0xcf, 0x75, 0xe1, 0x58, 0x3d, 0x62, 0xbe, 0xbf, 0x44, 0x3b, 0x7e, 0x99, 0xa3, 0x25, 0xc2, 0xf4,
-	0x62, 0x06, 0x9b, 0x64, 0x99, 0xd5, 0x07, 0xca, 0xce, 0xf0, 0x35, 0x89, 0x96, 0x28, 0x07, 0x73,
-	0x6c, 0x0a, 0x59, 0xfd, 0x8e, 0xb4, 0x41, 0xed, 0xf8, 0xd3, 0x48, 0x94, 0x0d, 0x4d, 0xb9, 0x2a,
-	0xd7, 0xf5, 0xf6, 0xae, 0x95, 0x1a, 0x6d, 0xee, 0xa0, 0xe1, 0x78, 0x97, 0x2c, 0xea, 0x15, 0xd5,
-	0xcb, 0xe8, 0xfa, 0xd3, 0xd5, 0x70, 0xda, 0x00, 0x2e, 0xb7, 0x0b, 0x4d, 0x21, 0xb8, 0x65, 0xc6,
-	0x65, 0x41, 0xff, 0xf3, 0xa8, 0x77, 0xcc, 0xba, 0xf4, 0x04, 0x7a, 0x42, 0x75, 0x10, 0xb6, 0x30,
-	0xeb, 0xed, 0x6d, 0xba, 0xfc, 0x0b, 0xd4, 0x49, 0xa4, 0x07, 0x4c, 0xa3, 0xe1, 0x8c, 0x47, 0x32,
-	0x75, 0x86, 0xb5, 0xec, 0x0f, 0x95, 0x3c, 0xf3, 0xf9, 0x27, 0x00, 0x00, 0xff, 0xff, 0xc8, 0xeb,
-	0x91, 0xe1, 0x5e, 0x01, 0x00, 0x00,
+	// 212 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0xe2, 0x2b, 0xc9, 0x2f, 0xc8,
+	0xcf, 0xc9, 0x4f, 0xaf, 0xd4, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x62, 0xcd, 0xcd, 0x4f, 0x49,
+	0xcd, 0x51, 0x5a, 0xc5, 0xc4, 0xc5, 0x11, 0x02, 0x95, 0x11, 0x12, 0xe2, 0x62, 0xc9, 0x4b, 0xcc,
+	0x4d, 0x95, 0x60, 0x54, 0x60, 0xd4, 0xe0, 0x0c, 0x02, 0xb3, 0x85, 0x2c, 0xb9, 0xb8, 0x32, 0xf3,
+	0x4a, 0x52, 0x8b, 0xd2, 0x12, 0x93, 0x53, 0x8b, 0x25, 0x98, 0x14, 0x98, 0x35, 0xb8, 0x8d, 0x24,
+	0xf5, 0xc0, 0x9a, 0xf5, 0x60, 0x1a, 0xf5, 0x3c, 0x61, 0x2a, 0x82, 0x90, 0x14, 0x4b, 0x9d, 0x63,
+	0xe4, 0xe2, 0x84, 0xcb, 0x60, 0x35, 0x5c, 0x9f, 0x8b, 0xb9, 0x24, 0xb1, 0x40, 0x82, 0x49, 0x81,
+	0x51, 0x83, 0xdb, 0x48, 0x16, 0xa7, 0xa9, 0x7a, 0x21, 0x89, 0x05, 0x41, 0x20, 0x95, 0x52, 0x35,
+	0x5c, 0xcc, 0x21, 0x89, 0x05, 0x42, 0x02, 0x5c, 0xcc, 0xb9, 0x89, 0xc9, 0x50, 0xa3, 0x40, 0x4c,
+	0x21, 0x77, 0x2e, 0xee, 0xcc, 0x82, 0xf8, 0xc4, 0x94, 0xa2, 0xd4, 0xe2, 0x62, 0xb8, 0x3b, 0xd5,
+	0xf0, 0x9a, 0xa8, 0xe7, 0x19, 0xe0, 0x08, 0x56, 0x1f, 0xc4, 0x95, 0x59, 0xe0, 0x08, 0xd5, 0x29,
+	0x25, 0xc5, 0xc5, 0x01, 0x13, 0x17, 0xe2, 0xe3, 0x62, 0xca, 0x2c, 0x80, 0xda, 0xc2, 0x94, 0x59,
+	0x90, 0xc4, 0x06, 0x0e, 0x3a, 0x63, 0x40, 0x00, 0x00, 0x00, 0xff, 0xff, 0x63, 0xbe, 0x54, 0x4f,
+	0x4c, 0x01, 0x00, 0x00,
 }

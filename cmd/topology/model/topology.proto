@@ -2,28 +2,24 @@ syntax = "proto3";
 
 package model;
 
-message IPAdress {
-    string ip = 1;
-}
-
-message Interface {
-    string name = 1;
-}
-
-message Tap {
-    string name = 1;
-    string mac = 2;
-    repeated IPAdress ip_adresses = 3;
-}
-
-message Bridge {
-    string name = 1;
-    repeated Interface interfaces = 2;
-}
-
 message Topology {
+    string name = 1;
 
-    Bridge bridge = 1;
-    repeated Tap taps = 2;
+    message Interface {
+        string name = 1;
 
+        message Tap {
+            string mac = 1;
+
+            message IPAdress {
+                string ip = 1;
+            }
+
+            repeated IPAdress ip_adresses = 2;
+        }
+
+        Tap tap = 2;
+    }
+
+    repeated Interface interfaces = 2;
 }
