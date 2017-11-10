@@ -1,28 +1,25 @@
 # Topology example plugin
 
 **Notice**
-_This example working with simple topology data. This is not meant to be use in production code. 
-The topology data is simplified and to the fully working topology need to be changed.
-This task were good practice for reader. Write TAPs, Interfaces and/or Bridges separately
-into DB and change the final topology plugin example to react for the changes as well_
+_This example works with simple topology data. The data is not meant to be use in production code. 
+The topology data is simplified. It needs to be changed to become fully working topology.
+This task is a good practice for the reader. Write TAPs, Interfaces and/or Bridges separately
+into DB and change the final topology plugin example to reflect the changes as well._
 
-This example and this document is about to show you step by step how to create a simple plugin using ligato framework. 
-At the final stage the plugin should be able create a simple topology written in [ETCD](https://github.com/ligato/cn-infra/tree/master/db/keyval/etcdv3) 
-used with [protocol buffers](https://github.com/golang/protobuf)
+The example and the document provide step by step instruction on how to create a simple plugin using ligato framework. At the final stage, the plugin should be able to create this simple topology and write it into [ETCD](https://github.com/ligato/cn-infra/tree/master/db/keyval/etcdv3), using [protocol buffers](https://github.com/golang/protobuf).
 
-After reading documentation of [cn-infra](https://github.com/ligato/cn-infra/blob/master/README.md) 
-the reader should be able to create a simple plugin lets say we name it a topology.
+After reading [cn-infra documentation](https://github.com/ligato/cn-infra/blob/master/README.md), the reader should be able to create a simple plugin. For the example purpose, the plugin's name is topology.
 
-Every step is in separate go file so you don't need to copy paste but just run example.
+Every step is a separate go file. Thus the reader does not need to copy-paste, only to run the example.
 
 #### Step 1
  
-Create a simple plugin is pretty straightforward
+To create a simple plugin is straightforward.
 This is inspired by [HelloWorld](https://github.com/ligato/cn-sample-service/tree/master/cmd/helloworld) example.
-Important is to look at the tree methods Init, AfterInit and Close. Init is called when the plugin started. 
-This is the plugin main initialization phase and it is mandatory. 
-AfterInit is called after plugin initialized and this part of the plugin is optional. 
-To clean up everything can be used Close method.
+It is important to look at three methods: Init, AfterInit and Close.
+- Init is called when the plugin is started. This is the plugin main initialization phase and it is mandatory. 
+- AfterInit is called after plugin is initialized and this part of the plugin is optional. 
+- Close method cleans channels and routines and it is mandatory in case channels and routines are used. Otherwise it does not need to be implemented.
 
 ```go
 func (plugin *TopologyPlugin) Init() (err error) {
@@ -42,8 +39,7 @@ func (plugin *TopologyPlugin) Close() error {
 }
 ```
 
-Second thing is how to run plugin itself. It is pretty simply.
-[Flavors](https://github.com/ligato/cn-infra/tree/master/flavors), instantiate and run the plugin.
+Another important issue is running the plugin itself. [Flavors](https://github.com/ligato/cn-infra/tree/master/flavors) instantiate and run the plugin.
 
 ```go
 func main() {
@@ -62,17 +58,15 @@ func main() {
 
 #### Step 2
 
-Now is time to make small changes. 
+In this step we focus on making few small changes. 
 
-1. Need to change [flavor](https://github.com/ligato/cn-infra/tree/master/flavors) from local to connection.
-As the plugin is intended to use [ETCD](https://github.com/ligato/cn-infra/tree/master/db/keyval/etcdv3) 
-and [protocol buffers](https://github.com/golang/protobuf)
+Change [flavor](https://github.com/ligato/cn-infra/tree/master/flavors) from local to connection, as the plugin is intended to use [ETCD](https://github.com/ligato/cn-infra/tree/master/db/keyval/etcdv3) and [protocol buffers](https://github.com/golang/protobuf).
 
 ```go
 	flavor := connectors.AllConnectorsFlavor{}	
 ```
 
-Also it is about a time to add some data structure. The data structure is in model directory not in step2 because it will be used by another steps as well.
+Add some data structure. The data structure is located in model directory not in step2, because it will be used by another steps as well.
 
 ```proto
 syntax = "proto3";
@@ -102,16 +96,16 @@ message Topology {
 }
 ```
 
-After creating structure and generating go file with [(see tutorial)](https://developers.google.com/protocol-buffers/docs/gotutorial)
+After creating structure and [generating go file](https://developers.google.com/protocol-buffers/docs/gotutorial),
 
 ```bash
 protoc --go_out=. *.proto
 ```
 
-the file topology.pb.go should be created. Now some functions needs to be added. 
+the file topology.pb.go should be created. Now, add some functions: 
 - Function for creating sample data.
 - Function to get ETCD path _key to store data_
-- Function put() to store data into ETDC
+- Function put() to save data into ETDC
 
 ```go
 func (plugin *TopologyPlugin) buildData() *model.Topology {
@@ -147,8 +141,8 @@ func etcdPath() string {
 }
 ```
 
-Also the Init() function now initializes ETDC with etcd.conf file and AfterInit() stores data. 
-Close() is closing decorator.
+The Init() function initializes ETDC with etcd.conf file and AfterInit() stores the data. 
+Close() is a closing decorator.
 
 etcd.conf:
 ```bash
@@ -192,7 +186,7 @@ func (plugin *TopologyPlugin) Close() error {
 }
 ```
 
-To be able test it as write sample data ETCD need to be running. 
+ETCD needs to be running in order to test the plugin and write the data to ETCD. 
 
 ```bash
 sudo docker run -p 2379:2379 --name etcd --rm \
@@ -201,14 +195,14 @@ sudo docker run -p 2379:2379 --name etcd --rm \
     -listen-client-urls http://0.0.0.0:2379
 ```
 
-When the step2 is running it should be clearly visible in logs.
+The logs content should reflect that step2 is running.
 
 #### Step 3
 
-This step add a watcher to react for ETDC changes to be able work if data are changed (or deleted).
-Also creating dependencies and if the plugin doesn't need all connectors flavors will be changed to only needed plugins.
+Step3 adds a watcher into the plugin, that watches for changes in ETDC and reacts to them. 
+In previous steps, predefined flavours from cn-infra were used. In this step, flavor specific to the plugin was created. 
 
-- First of all a Deps _like dependencies_ need to be created
+- First of all, _Deps structure_ needs to be created.
 
 ```go
 // Deps lists dependencies of TopologyPlugin.
@@ -236,9 +230,9 @@ type TopologyFlavor struct {
 }
 ```
 
-All needed dependencies are injected through deps file and initialization of ETCD can be romoved from Init() function.
+All necessary dependencies are injected through _Deps struct_.
 
-- Now it needed a watcher to be registered to obtain any changes.
+- Now a watcher needs to be registered to receive any changes.
 
 ```go
 func (plugin *TopologyPlugin) subscribeWatcher() (err error) {
@@ -256,7 +250,7 @@ func (plugin *TopologyPlugin) subscribeWatcher() (err error) {
 }
 ```
 
-- And creating consumer who is react for all the changes
+- And consumer that reacts to all the changes needs to be created.
 
 ```go
 func (plugin *TopologyPlugin) consumer() {
@@ -290,19 +284,18 @@ func (plugin *TopologyPlugin) consumer() {
 }
 ```
 
-How to test it locally:
-- Build it direct in ste3 directory
+To test the plugin locally:
+- Build the plugin directly in step3 directory.
 ```bash
 go build step3.go deps.go
 ```
-- Run etcd docker (see in this document [Step2](#step-2))
-- Run step3 with configuration
+- Run etcd docker (see in this document [Step2](#step-2)).
+- Run step3 with configuration.
 ```bash
 ./step3 -etcdv3-config="etcd.conf"
 ```
 
-Now it will be seen in logs twice that plugin saves data and receives event with change 
-type Put and first with update:false second with update:true
+After running the plugin, two events associated with writing into ETCD are present in the logs and two events associated with changes in ETCD are presnet in the logs.
 
 
 
