@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package model;
+
+message Topology {
+    string name = 1;
+
+    message Interface {
+        string name = 1;
+
+        message Tap {
+            string mac = 1;
+
+            message IPAdress {
+                string ip = 1;
+            }
+
+            repeated IPAdress ip_adresses = 2;
+        }
+
+        Tap tap = 2;
+    }
+
+    repeated Interface interfaces = 2;
+}

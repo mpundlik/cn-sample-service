@@ -19,6 +19,7 @@ The sample service repository contains:
 * Flavors/Plugins are used from [cn-infra](https://github.com/ligato/cn-infra)
 * [Core](https://github.com/ligato/cn-infra/tree/master/core) from cn-infra - lifecycle management of plugins (loading, 
 initialization, unloading)
+* [Topology plugin](cmd/topology) - Example plugin can be followed step by step.
 
 ## Quickstart
 
