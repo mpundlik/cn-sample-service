@@ -19,7 +19,7 @@ curl https://glide.sh/get | sh
 # checkout agent code
 mkdir -p $GOPATH/src/github.com/ligato
 cd $GOPATH/src/github.com/ligato
-git clone https://github.com/ligato/cn-sample-service.git
+git clone https://github.com/mpundlik/cn-sample-service.git
 
 
 # build the agent
