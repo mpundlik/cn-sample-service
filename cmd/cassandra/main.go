@@ -18,28 +18,10 @@ import (
 	"errors"
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/sql"
-	"github.com/ligato/cn-infra/db/sql/cassandra"
-	"github.com/ligato/cn-infra/flavors/local"
-	"github.com/ligato/cn-infra/flavors/rpc"
 	"github.com/ligato/cn-infra/logging/logroot"
-	"github.com/ligato/cn-infra/rpc/rest"
-	"github.com/namsral/flag"
 	"os"
 	"time"
 )
-
-type Deps struct {
-	// httpmux is a dependency of the plugin that needs to be injected.
-	local.PluginLogDeps
-	HTTPHandlers rest.HTTPHandlers
-	BrokerPlugin sql.BrokerPlugin
-}
-
-type CassandraRestFlavor struct {
-	rpc.FlavorRPC
-	CASSANDRA cassandra.Plugin
-	CassandraRestAPIPlugin
-}
 
 // CassandraRestAPIPlugin is a plugin that showcase the extensibility of vpp agent.
 type CassandraRestAPIPlugin struct {
@@ -115,10 +97,6 @@ func (plugin *CassandraRestAPIPlugin) Close() error {
 
 //setup used to setup Cassandra before running each request
 func (plugin *CassandraRestAPIPlugin) setup() (err error) {
-	if plugin.broker == nil {
-		plugin.Log.Errorf("Cassandra broker is nil")
-		return errors.New("Cassandra broker is nil")
-	}
 
 	err1 := plugin.broker.Exec(`CREATE KEYSPACE IF NOT EXISTS example with replication = { 'class' : 'SimpleStrategy', 'replication_factor' : 1 }`)
 	if err1 != nil {
@@ -226,28 +204,4 @@ func (plugin *CassandraRestAPIPlugin) teardown() (err error) {
 	return nil
 }
 
-// Inject sets object references
-func (f *CassandraRestFlavor) Inject() (isInjected bool) {
-	if !f.FlavorRPC.Inject() {
-		return false
-	}
 
-	f.CassandraRestAPIPlugin.Deps.HTTPHandlers = &f.HTTP
-	f.CassandraRestAPIPlugin.Deps.BrokerPlugin = &f.CASSANDRA
-	f.CASSANDRA.Deps.PluginInfraDeps = *f.InfraDeps("cassandra")
-	f.CassandraRestAPIPlugin.Deps.PluginLogDeps = *f.LogDeps("cassandra-rest-api-plugin")
-
-	return true
-}
-
-// Plugins combines all Plugins in flavor to the list
-func (f *CassandraRestFlavor) Plugins() []*core.NamedPlugin {
-	f.Inject()
-	return core.ListPluginsInFlavor(f)
-}
-
-//init defines cassandra flags // TODO switch to viper to avoid global configuration
-func init() {
-	flag.String("cassandra-config", "cassandra.conf.yaml",
-		"Location of the Cassandra Client configuration file; also set via 'CASSANDRA_CONFIG' env variable.")
-}
