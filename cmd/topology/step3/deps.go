@@ -38,28 +38,6 @@ type TopologyFlavor struct {
 	closeChan *chan struct{}
 }
 
-// Inject sets inter-plugin references.
-/*func (tf *TopologyFlavor) Inject() (allReadyInjected bool) {
-	// Init local flavor
-	if tf.FlavorLocal == nil {
-		tf.FlavorLocal = &local.FlavorLocal{}
-	}
-	tf.FlavorLocal.Inject()
-
-	// Init Resync, ETCD + ETCD sync
-	//tf.ResyncOrch.Deps.PluginLogDeps = *tf.FlavorLocal.LogDeps("resync-orch1")
-	//tf.ETCD.Deps.PluginInfraDeps = *tf.InfraDeps("etcdv3")
-	connectors.InjectKVDBSync(&tf.ETCDDataSync, &tf.ETCD, tf.ETCD.PluginName, tf.FlavorLocal, &tf.ResyncOrch)
-
-	// Inject infra + transport (publisher, watcher) to example plugin
-	tf.TopologyExample.PluginInfraDeps = *tf.FlavorLocal.InfraDeps("topology-plugin")
-	tf.TopologyExample.Publisher = &tf.ETCDDataSync
-	tf.TopologyExample.Watcher = &tf.ETCDDataSync
-	tf.TopologyExample.closeChannel = tf.closeChan
-
-	return true
-}*/
-
 // Plugins combines all plugins in the flavor into a slice.
 func (tf *TopologyFlavor) Plugins() []*core.NamedPlugin {
 	tf.Inject()

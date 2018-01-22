@@ -61,7 +61,7 @@ func main() {
 
 	err := core.EventLoopWithInterrupt(agent, pluginCompleted)
 	if err != nil {
-		fmt.Errorf("error in event loop %v", err)
+		fmt.Printf("error in event loop %v", err)
 		os.Exit(1)
 	}
 }
@@ -156,7 +156,7 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 		)`)
 
 	if err7 != nil {
-		fmt.Errorf("error creating user-defined type address %v", err7)
+		plugin.Log.Errorf("error creating user-defined type address %#v", err7)
 		return err7
 	}
 

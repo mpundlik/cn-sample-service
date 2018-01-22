@@ -57,7 +57,6 @@ func main() {
 	tf.TopologyExample.Watcher = &tf.ETCDDataSync
 	tf.TopologyExample.closeChannel = tf.closeChan
 
-	//plugins := flavor.Plugins()
 	agent := core.NewAgent(core.Inject(&tf))
 	core.EventLoopWithInterrupt(agent, exampleFinished)
 
