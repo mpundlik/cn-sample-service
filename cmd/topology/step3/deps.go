@@ -6,8 +6,12 @@ import (
 	"github.com/ligato/cn-infra/datasync/kvdbsync"
 	"github.com/ligato/cn-infra/datasync/resync"
 	"github.com/ligato/cn-infra/db/keyval/etcdv3"
-	"github.com/ligato/cn-infra/flavors/connectors"
 	"github.com/ligato/cn-infra/flavors/local"
+	"github.com/namsral/flag"
+)
+
+var (
+	etcdv3Config string
 )
 
 // Deps lists dependencies of TopologyPlugin.
@@ -35,7 +39,7 @@ type TopologyFlavor struct {
 }
 
 // Inject sets inter-plugin references.
-func (tf *TopologyFlavor) Inject() (allReadyInjected bool) {
+/*func (tf *TopologyFlavor) Inject() (allReadyInjected bool) {
 	// Init local flavor
 	if tf.FlavorLocal == nil {
 		tf.FlavorLocal = &local.FlavorLocal{}
@@ -43,8 +47,8 @@ func (tf *TopologyFlavor) Inject() (allReadyInjected bool) {
 	tf.FlavorLocal.Inject()
 
 	// Init Resync, ETCD + ETCD sync
-	tf.ResyncOrch.Deps.PluginLogDeps = *tf.FlavorLocal.LogDeps("resync-orch")
-	tf.ETCD.Deps.PluginInfraDeps = *tf.InfraDeps("etcdv3")
+	//tf.ResyncOrch.Deps.PluginLogDeps = *tf.FlavorLocal.LogDeps("resync-orch1")
+	//tf.ETCD.Deps.PluginInfraDeps = *tf.InfraDeps("etcdv3")
 	connectors.InjectKVDBSync(&tf.ETCDDataSync, &tf.ETCD, tf.ETCD.PluginName, tf.FlavorLocal, &tf.ResyncOrch)
 
 	// Inject infra + transport (publisher, watcher) to example plugin
@@ -54,10 +58,17 @@ func (tf *TopologyFlavor) Inject() (allReadyInjected bool) {
 	tf.TopologyExample.closeChannel = tf.closeChan
 
 	return true
-}
+}*/
 
 // Plugins combines all plugins in the flavor into a slice.
 func (tf *TopologyFlavor) Plugins() []*core.NamedPlugin {
 	tf.Inject()
 	return core.ListPluginsInFlavor(tf)
+}
+
+
+//init defines cassandra flags // TODO switch to viper to avoid global configuration
+func init() {
+	flag.StringVar(&etcdv3Config, "etcdv3-config", "etcd.conf",
+		"Location of the Etcd Client configuration file; also set via 'ETCD_CONFIG' env variable.")
 }

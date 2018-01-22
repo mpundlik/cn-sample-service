@@ -12,7 +12,6 @@
 package main
 
 import (
-	"time"
 
 	"github.com/ligato/cn-infra/config"
 	"github.com/ligato/cn-infra/core"
@@ -21,22 +20,28 @@ import (
 	"github.com/ligato/cn-infra/db/keyval/kvproto"
 	"github.com/ligato/cn-infra/flavors/connectors"
 	"github.com/ligato/cn-sample-service/cmd/topology/model"
+	"github.com/ligato/cn-infra/flavors/local"
 )
 
 type TopologyPlugin struct {
+	local.PluginInfraDeps
 	data model.Topology
 	db   datasync.KeyProtoValWriter
 }
 
 func main() {
-	// Some flavors from cn-infra
-	flavor := connectors.AllConnectorsFlavor{}
 
-	// create an instance of the plugin
-	topoPlugin := TopologyPlugin{}
+	// Create new agent using connectors flavor
+	agent := connectors.NewAgent(connectors.WithPlugins(func(allConnectors *connectors.AllConnectorsFlavor) []*core.NamedPlugin {
+		// create an instance of the plugin
+		topoPlugin := &TopologyPlugin{}
+		topoPlugin.PluginInfraDeps = *allConnectors.InfraDeps("topology-plugin")
 
-	// Create new agent
-	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(flavor.Plugins(), &core.NamedPlugin{PluginName: PluginID, Plugin: &topoPlugin})...)
+		return []*core.NamedPlugin{
+			{topoPlugin.PluginName, topoPlugin},
+		}
+	}))
+
 
 	core.EventLoopWithInterrupt(agent, nil)
 }
@@ -53,19 +58,19 @@ func (plugin *TopologyPlugin) initializeEtcd() error {
 	fileConfig := &etcdv3.Config{}
 	if parseError := config.ParseConfigFromYamlFile("etcd.conf", fileConfig); parseError == nil {
 		if cfg, configError := etcdv3.ConfigToClientv3(fileConfig); configError == nil {
-			if db, dbError := etcdv3.NewEtcdConnectionWithBytes(*cfg, logroot.StandardLogger()); dbError == nil {
+			if db, dbError := etcdv3.NewEtcdConnectionWithBytes(*cfg, plugin.Log); dbError == nil {
 				plugin.db = kvproto.NewProtoWrapper(db)
 				return nil
 			} else {
-				logroot.StandardLogger().Error("Cannot connect ETCD.")
+				plugin.Log.Error("Cannot connect ETCD.")
 				return dbError
 			}
 		} else {
-			logroot.StandardLogger().Error("Wrong ETCD configure file")
+			plugin.Log.Error("Wrong ETCD configure file")
 			return configError
 		}
 	} else {
-		logroot.StandardLogger().Error("Cannot find ETCD or corrupted ETCD configure file")
+		plugin.Log.Error("Cannot find ETCD or corrupted ETCD configure file")
 		return parseError
 	}
 
@@ -76,7 +81,7 @@ func (plugin *TopologyPlugin) Init() (err error) {
 
 	plugin.buildData()
 	if err := plugin.initializeEtcd(); err == nil {
-		logroot.StandardLogger().Info("Topology plugin initialized properly.")
+		plugin.Log.Info("Topology plugin initialized properly.")
 	}
 	return err
 
@@ -110,8 +115,8 @@ func (plugin *TopologyPlugin) buildData() {
 
 func (plugin *TopologyPlugin) put() error {
 
-	logroot.StandardLogger().Info("Saving: ", TopologyKey)
-	logroot.StandardLogger().Info("Data: ", plugin.data)
+	plugin.Log.Info("Saving: ", TopologyKey)
+	plugin.Log.Info("Data: ", plugin.data)
 
 	// Insert the key-value pair.
 	return plugin.db.Put(TopologyKey, &plugin.data)

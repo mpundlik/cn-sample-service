@@ -20,6 +20,8 @@ import (
 	"github.com/ligato/cn-sample-service/cmd/topology/model"
 	"strings"
 	"time"
+	"github.com/ligato/cn-infra/flavors/local"
+	"github.com/ligato/cn-infra/flavors/connectors"
 )
 
 type TopologyPlugin struct {
@@ -38,9 +40,25 @@ func main() {
 
 	// Start Agent with ExampleFlavor
 	// (combination of ExamplePlugin & cn-infra plugins).
-	flavor := TopologyFlavor{closeChan: &exampleFinished}
-	plugins := flavor.Plugins()
-	agent := core.NewAgent(flavor.LogRegistry().NewLogger("topology"), 15*time.Second, plugins...)
+
+	tf := TopologyFlavor{closeChan: &exampleFinished}
+
+	if tf.FlavorLocal == nil {
+		tf.FlavorLocal = &local.FlavorLocal{}
+	}
+
+	tf.ResyncOrch.Deps.PluginLogDeps = *tf.FlavorLocal.LogDeps("resync-orch")
+	tf.ETCD.Deps.PluginInfraDeps = *tf.InfraDeps("etcdv3")
+	connectors.InjectKVDBSync(&tf.ETCDDataSync, &tf.ETCD, tf.ETCD.PluginName, tf.FlavorLocal, &tf.ResyncOrch)
+
+	// Inject infra + transport (publisher, watcher) to example plugin
+	tf.TopologyExample.PluginInfraDeps = *tf.FlavorLocal.InfraDeps("topology-plugin")
+	tf.TopologyExample.Publisher = &tf.ETCDDataSync
+	tf.TopologyExample.Watcher = &tf.ETCDDataSync
+	tf.TopologyExample.closeChannel = tf.closeChan
+
+	//plugins := flavor.Plugins()
+	agent := core.NewAgent(core.Inject(&tf))
 	core.EventLoopWithInterrupt(agent, exampleFinished)
 
 }
@@ -86,7 +104,7 @@ func (plugin *TopologyPlugin) writeData() {
 	key := etcdPath()
 	topo := plugin.buildData(1)
 
-	logroot.StandardLogger().Infof("Saving data: %v into: %v", topo, key)
+	plugin.Log.Infof("Saving data: %v into: %v", topo, key)
 	// Insert the key-value pair.
 	plugin.Publisher.Put(key, topo)
 
@@ -94,7 +112,7 @@ func (plugin *TopologyPlugin) writeData() {
 
 	topo = plugin.buildData(2)
 
-	logroot.StandardLogger().Infof("Saving data: %v into: %v", topo, key)
+	plugin.Log.Infof("Saving data: %v into: %v", topo, key)
 	// Insert the key-value pair.
 	plugin.Publisher.Put(key, topo)
 

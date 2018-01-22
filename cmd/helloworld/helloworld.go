@@ -29,7 +29,8 @@ func main() {
 		hwPlugin.Deps.PluginLogDeps = *local.LogDeps("hello-world-example")
 
 		return []*core.NamedPlugin{
-			{hwPlugin.PluginName, hwPlugin}}
+			{hwPlugin.PluginName, hwPlugin},
+		}
 	}))
 
 	core.EventLoopWithInterrupt(agent, nil)

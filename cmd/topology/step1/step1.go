@@ -14,37 +14,39 @@ package main
 import (
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/flavors/local"
-	"time"
 )
 
 type TopologyPlugin struct {
+	local.PluginInfraDeps
 }
 
 func main() {
-	// Some flavors from cn-infra
-	flavor := local.FlavorLocal{}
 
-	// create an instance of the plugin
-	topoPlugin := TopologyPlugin{}
+	// Create new agent using local flavor
+	agent := local.NewAgent(local.WithPlugins(func(local *local.FlavorLocal) []*core.NamedPlugin {
 
-	// Create new agent
-	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(flavor.Plugins(), &core.NamedPlugin{PluginName: PluginID, Plugin: &topoPlugin})...)
+		// create an instance of the plugin
+		topoPlugin := &TopologyPlugin{}
+		topoPlugin.PluginInfraDeps = *local.InfraDeps("topology-plugin")
+
+		return []*core.NamedPlugin {
+			{topoPlugin.PluginName, topoPlugin},
+		}
+
+	}))
 
 	core.EventLoopWithInterrupt(agent, nil)
 }
 
-// PluginID of the custom govpp_call plugin
-const PluginID core.PluginName = "topology-plugin"
-
 // Init is called on plugin startup. New logger is instantiated.
 func (plugin *TopologyPlugin) Init() (err error) {
-	logroot.StandardLogger().Info("Topology Plugin initialized.")
+	plugin.Log.Info("Topology Plugin initialized.")
 	return nil
 }
 
 // AfterInit logs a sample message.
 func (plugin *TopologyPlugin) AfterInit() error {
-	logroot.StandardLogger().Info("Topology Plugin is running.")
+	plugin.Log.Info("Topology Plugin is running.")
 	return nil
 }
 

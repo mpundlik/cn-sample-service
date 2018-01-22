@@ -17,8 +17,8 @@ package main
 import (
 	"errors"
 	"github.com/gorilla/mux"
-	"github.com/unrolled/render"
 	"net/http"
+	"github.com/unrolled/render"
 )
 
 //tweetsGetHandler defining route handler which reads a tweet or all tweets from cassandra database

@@ -20,6 +20,9 @@ import (
 	"github.com/ligato/cn-infra/db/sql"
 	"os"
 	"fmt"
+	"github.com/ligato/cn-infra/flavors/rpc"
+	"github.com/ligato/cn-infra/db/sql/cassandra"
+	"github.com/ligato/cn-infra/flavors/local"
 )
 
 // CassandraRestAPIPlugin is a plugin that showcase the extensibility of vpp agent.
@@ -36,15 +39,29 @@ type CassandraRestAPIPlugin struct {
 //main entry point for the sample service
 func main() {
 	pluginCompleted := make(chan struct{}, 1)
-	flavor := CassandraRestFlavor{}
-	flavor.CassandraRestAPIPlugin.pluginCompleted = pluginCompleted
 
 	// Create new agent
-	agent := core.NewAgent(&flavor)
+	agent := rpc.NewAgent(rpc.WithPlugins(func(rpc *rpc.FlavorRPC) []*core.NamedPlugin {
+
+		cassandraPlugin := &cassandra.Plugin{}
+		cassandraPlugin.Deps.PluginInfraDeps = *rpc.InfraDeps("cassandra-plugin", local.WithConf())
+
+		cassandraRestAPIPlugin := &CassandraRestAPIPlugin{}
+		cassandraRestAPIPlugin.pluginCompleted = pluginCompleted
+		cassandraRestAPIPlugin.Deps.PluginInfraDeps = *rpc.InfraDeps("cassandra-rest-api-plugin")
+		cassandraRestAPIPlugin.Deps.HTTPHandlers = &rpc.HTTP
+		cassandraRestAPIPlugin.Deps.BrokerPlugin = cassandraPlugin
+
+		return []*core.NamedPlugin{
+			{cassandraPlugin.PluginName, cassandraPlugin},
+			{cassandraRestAPIPlugin.PluginName, cassandraRestAPIPlugin},
+		}
+
+	}))
 
 	err := core.EventLoopWithInterrupt(agent, pluginCompleted)
 	if err != nil {
-		fmt.Errorf("Error in event loop %v", err)
+		fmt.Errorf("error in event loop %v", err)
 		os.Exit(1)
 	}
 }
@@ -127,7 +144,7 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 		)`)
 
 	if err6 != nil {
-		plugin.Log.Errorf("Error creating user-defined type phone %v", err6)
+		plugin.Log.Errorf("error creating user-defined type phone %v", err6)
 		return err6
 	}
 
@@ -139,7 +156,7 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 		)`)
 
 	if err7 != nil {
-		fmt.Errorf("Error creating user-defined type address %v", err7)
+		fmt.Errorf("error creating user-defined type address %v", err7)
 		return err7
 	}
 
@@ -149,7 +166,7 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 		)`)
 
 	if err8 != nil {
-		plugin.Log.Errorf("Error creating table user %v", err8)
+		plugin.Log.Errorf("error creating table user %v", err8)
 		return err8
 	}
 
@@ -160,43 +177,43 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 func (plugin *CassandraRestAPIPlugin) teardown() (err error) {
 
 	if plugin.broker == nil {
-		plugin.Log.Errorf("Cassandra broker is nil")
-		return errors.New("Cassandra broker is nil")
+		plugin.Log.Errorf("cassandra broker is nil")
+		return errors.New("cassandra broker is nil")
 	}
 
 	err1 := plugin.broker.Exec(`DROP TABLE IF EXISTS example.tweet`)
 	if err1 != nil {
-		plugin.Log.Errorf("Error dropping table %v", err1)
+		plugin.Log.Errorf("error dropping table %v", err1)
 		return err1
 	}
 
 	err2 := plugin.broker.Exec(`DROP TABLE IF EXISTS example2.user`)
 	if err2 != nil {
-		plugin.Log.Errorf("Error dropping table %v", err2)
+		plugin.Log.Errorf("error dropping table %v", err2)
 		return err2
 	}
 
 	err3 := plugin.broker.Exec(`DROP TYPE IF EXISTS example2.address`)
 	if err3 != nil {
-		plugin.Log.Errorf("Error dropping type %v", err3)
+		plugin.Log.Errorf("error dropping type %v", err3)
 		return err3
 	}
 
 	err4 := plugin.broker.Exec(`DROP TYPE IF EXISTS example2.phone`)
 	if err4 != nil {
-		plugin.Log.Errorf("Error dropping type %v", err4)
+		plugin.Log.Errorf("error dropping type %v", err4)
 		return err4
 	}
 
 	err5 := plugin.broker.Exec(`DROP KEYSPACE IF EXISTS example`)
 	if err5 != nil {
-		plugin.Log.Errorf("Error dropping keyspace %v", err5)
+		plugin.Log.Errorf("error dropping keyspace %v", err5)
 		return err5
 	}
 
 	err6 := plugin.broker.Exec(`DROP KEYSPACE IF EXISTS example2`)
 	if err6 != nil {
-		plugin.Log.Errorf("Error dropping keyspace %v", err6)
+		plugin.Log.Errorf("error dropping keyspace %v", err6)
 		return err6
 	}
 
