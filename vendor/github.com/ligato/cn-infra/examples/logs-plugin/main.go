@@ -1,11 +1,9 @@
 package main
 
 import (
-	"time"
-
 	"github.com/ligato/cn-infra/core"
+	"github.com/ligato/cn-infra/flavors/local"
 	"github.com/ligato/cn-infra/logging"
-	"github.com/ligato/cn-infra/logging/logroot"
 )
 
 // *************************************************************************
@@ -26,16 +24,18 @@ func main() {
 	// Init close channel to stop the example after everything was logged
 	exampleFinished := make(chan struct{}, 1)
 
-	// Start Agent with ExampleFlavor
-	// (combination of ExamplePlugin & reused cn-infra plugins).
-	flavor := ExampleFlavor{ExamplePlugin: ExamplePlugin{exampleFinished: exampleFinished}}
-	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, flavor.Plugins()...)
+	// Start Agent with ExamplePlugin & LocalFlavor (reused cn-infra plugins).
+	agent := local.NewAgent(local.WithPlugins(func(flavor *local.FlavorLocal) []*core.NamedPlugin {
+		examplePlug := &ExamplePlugin{exampleFinished: exampleFinished,
+			PluginLogDeps: *flavor.LogDeps("logs-example")}
+		return []*core.NamedPlugin{{examplePlug.PluginName, examplePlug}}
+	}))
 	core.EventLoopWithInterrupt(agent, exampleFinished)
 }
 
 // ExamplePlugin presents the PluginLogger API.
 type ExamplePlugin struct {
-	Deps
+	local.PluginLogDeps
 	exampleFinished chan struct{}
 }
 
@@ -62,14 +62,18 @@ func (plugin *ExamplePlugin) Init() (err error) {
 	//log.Fatal("Bye") calls os.Exit(1) after logging
 
 	// Log with field - automatically adds timestamp
-	plugin.Log.WithField("Ex. string: ", exampleString).Info("Info log with field example")
+	plugin.Log.WithField("exampleString", exampleString).Info("Info log with field example")
 	// For multiple fields
-	plugin.Log.WithFields(map[string]interface{}{"Ex. string": exampleString, "Ex. num": exampleNum}).Info("Info log with field example string and num")
+	plugin.Log.WithFields(map[string]interface{}{"exampleString": exampleString, "exampleNum": exampleNum}).Info("Info log with field example string and num")
 
 	// Custom (child) logger with name
 	childLogger := plugin.Log.NewLogger("childLogger")
 	// Usage of custom loggers
 	childLogger.Infof("Log using named logger with name: %v", childLogger.GetName())
+	childLogger.Debug("Debug log using childLogger!")
+
+	childLogger2 := plugin.Log.NewLogger("childLogger2")
+	childLogger2.Debug("Debug log using childLogger2!")
 
 	// End the example
 	plugin.Log.Info("logs in plugin example finished, sending shutdown ...")

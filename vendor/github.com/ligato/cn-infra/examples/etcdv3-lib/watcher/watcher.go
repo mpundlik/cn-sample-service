@@ -11,7 +11,7 @@ import (
 	"github.com/ligato/cn-infra/db/keyval/etcdv3"
 	"github.com/ligato/cn-infra/db/keyval/kvproto"
 	"github.com/ligato/cn-infra/examples/etcdv3-lib/model/phonebook"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 )
 
 func processArgs() (*etcdv3.ClientConfig, error) {
@@ -40,6 +40,10 @@ func printContact(c *phonebook.Contact) {
 	fmt.Printf("\t%s\n\t\t%s\n\t\t%s\n", c.Name, c.Company, c.Phonenumber)
 }
 
+func printPrevContact(c *phonebook.Contact) {
+	fmt.Printf("Previous: \t%s\n\t\t%s\n\t\t%s\n", c.Name, c.Company, c.Phonenumber)
+}
+
 func main() {
 	cfg, err := processArgs()
 	if err != nil {
@@ -49,7 +53,7 @@ func main() {
 	}
 
 	// Create connection to etcd datastore.
-	broker, err := etcdv3.NewEtcdConnectionWithBytes(*cfg, logroot.StandardLogger())
+	broker, err := etcdv3.NewEtcdConnectionWithBytes(*cfg, logrus.DefaultLogger())
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -63,7 +67,7 @@ func main() {
 
 	// Register watcher and select the respChan channel as the destination
 	// for the delivery of all the change events.
-	err = protoBroker.Watch(keyval.ToChanProto(respChan), phonebook.EtcdPath())
+	err = protoBroker.Watch(keyval.ToChanProto(respChan), make(chan string), phonebook.EtcdPath())
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -78,9 +82,19 @@ watcherLoop:
 			switch resp.GetChangeType() {
 			case datasync.Put:
 				contact := &phonebook.Contact{}
+				prevContact := &phonebook.Contact{}
 				fmt.Println("Creating ", resp.GetKey())
 				resp.GetValue(contact)
+				exists, err := resp.GetPrevValue(prevContact)
+				if err != nil {
+					logrus.DefaultLogger().Errorf("err: %v", err)
+				}
 				printContact(contact)
+				if exists {
+					printPrevContact(prevContact)
+				} else {
+					fmt.Printf("Previous value does not exist\n")
+				}
 			case datasync.Delete:
 				fmt.Println("Removing ", resp.GetKey())
 			}

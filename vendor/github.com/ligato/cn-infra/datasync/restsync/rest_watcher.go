@@ -16,25 +16,25 @@ package restsync
 
 import (
 	"github.com/ligato/cn-infra/datasync"
+	"github.com/ligato/cn-infra/logging/logrus"
 
 	"net/http"
 
 	"github.com/gorilla/mux"
-	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/ligato/cn-infra/datasync/syncbase"
 	"github.com/unrolled/render"
 )
 
-// just a shortcut to make following code more readable
+// Just a shortcut to make following code more readable.
 type registerHTTPHandler func(path string, handler func(formatter *render.Render) http.HandlerFunc,
 	methods ...string) *mux.Route
 
-// NewAdapter is a constructor
+// NewAdapter is a constructor.
 func NewAdapter(registerHTTPHandler registerHTTPHandler, localtransp *syncbase.Registry) *Adapter {
 	return &Adapter{registerHTTPHandler: registerHTTPHandler, base: localtransp}
 }
 
-// Adapter is a REST transport adapter in front of Agent Plugins
+// Adapter is a REST transport adapter in front of Agent Plugins.
 type Adapter struct {
 	registerHTTPHandler registerHTTPHandler
 	base                *syncbase.Registry
@@ -46,11 +46,11 @@ func (adapter *Adapter) RegisterTestHandler() {
 	adapter.registerHTTPHandler("/restsync/test", testHandler, "GET")
 }
 
-// Watch registers HTTP handlers - basically bridges them with local dbadapter
+// Watch registers HTTP handlers - basically bridges them with local dbadapter.
 func (adapter *Adapter) Watch(resyncName string, changeChan chan datasync.ChangeEvent,
 	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (datasync.WatchRegistration, error) {
 
-	logroot.StandardLogger().Debug("REST KeyValProtoWatcher WatchData ", resyncName, " ", keyPrefixes)
+	logrus.DefaultLogger().Debug("REST KeyValProtoWatcher WatchData ", resyncName, " ", keyPrefixes)
 
 	for _, keyPrefix := range keyPrefixes {
 		adapter.registerHTTPHandler(keyPrefix+"{suffix}", adapter.putMessage, "PUT")

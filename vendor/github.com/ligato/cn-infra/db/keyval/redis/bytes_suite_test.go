@@ -27,13 +27,14 @@ import (
 	"strings"
 
 	"errors"
+
 	"github.com/alicebob/miniredis"
 	goredis "github.com/go-redis/redis"
 	"github.com/ligato/cn-infra/config"
 	"github.com/ligato/cn-infra/datasync"
 	"github.com/ligato/cn-infra/db/keyval"
 	"github.com/ligato/cn-infra/logging"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 	"github.com/ligato/cn-infra/utils/safeclose"
 	"github.com/onsi/gomega"
 )
@@ -50,7 +51,7 @@ var keyValues = map[string]string{
 }
 
 func TestMain(m *testing.M) {
-	log = logroot.StandardLogger()
+	log = logrus.DefaultLogger()
 
 	var err error
 	miniRedis, err = miniredis.Run()
@@ -95,7 +96,7 @@ func createMiniRedisConnection() {
 		// Enables read only queries on slave nodes.
 		ReadOnly: nodeConfig.EnableReadQueryOnSlave,
 
-		// TLS Config to use. When set TLS will be negotiated.
+		// TLS Config to use. When set, TLS will be negotiated.
 		TLSConfig: nil,
 
 		// Optional password. Must match the password specified in the requirepass server configuration option.
@@ -114,7 +115,7 @@ func createMiniRedisConnection() {
 		PoolTimeout: nodeConfig.Pool.PoolTimeout,
 		// Amount of time after which client closes idle connections. Should be less than server's timeout. Default is 5 minutes.
 		IdleTimeout: nodeConfig.Pool.IdleTimeout,
-		// Frequency of idle checks. Default is 1 minute. When minus value is set, then idle check is disabled.
+		// Frequency of idle checks. Default is 1 minute. When negative value is set, then idle check is disabled.
 		IdleCheckFrequency: nodeConfig.Pool.IdleCheckFrequency,
 
 		// Dialer creates new network connection and has priority over Network and Addr options.
@@ -130,7 +131,7 @@ func createMiniRedisConnection() {
 		MaxRetryBackoff: 0,
 	})
 	// client = &MockGoredisClient{}
-	bytesConn, _ = NewBytesConnection(client, logroot.StandardLogger())
+	bytesConn, _ = NewBytesConnection(client, logrus.DefaultLogger())
 	bytesBrokerWatcher = bytesConn.NewBrokerWatcher("unit_test-")
 
 	for k, v := range keyValues {
@@ -352,7 +353,7 @@ func TestKeyIterator(t *testing.T) {
 	gomega.Expect(err).To(gomega.BeNil())
 	it = iterator.(*bytesKeyIterator)
 	it.index = max
-	it.cursor = 1 // This only meant to trigger scan.  miniRedis, however, will not accept non 0 cursor.
+	it.cursor = 1 // This only meant to trigger scan.  miniRedis, however, will not accept nonzero cursor.
 	_, _, _ = it.GetNext()
 }
 
@@ -391,7 +392,7 @@ func TestKeyValIterator(t *testing.T) {
 	gomega.Expect(err).To(gomega.BeNil())
 	it = iterator.(*bytesKeyValIterator)
 	it.index = max
-	it.cursor = 1 // This only meant to trigger scan.  miniRedis, however, will not accept non 0 cursor.
+	it.cursor = 1 // This only meant to trigger scan.  miniRedis, however, will not accept nonzero cursor.
 	_, _ = it.GetNext()
 }
 
@@ -447,12 +448,12 @@ func consumeEvent(respChan chan keyval.BytesWatchResp, eventCount int) {
 		if ok {
 			switch r.GetChangeType() {
 			case datasync.Put:
-				log.Debugf("KeyValProtoWatcher received %v: %s=%s (rev %d)",
-					r.GetChangeType(), r.GetKey(), string(r.GetValue()), r.GetRevision())
+				log.Debugf("KeyValProtoWatcher received %v: %s=%s prev=%s (rev %d)",
+					r.GetChangeType(), r.GetKey(), string(r.GetValue()), string(r.GetPrevValue()), r.GetRevision())
 			case datasync.Delete:
-				log.Debugf("KeyValProtoWatcher received %v: %s (rev %d)",
-					r.GetChangeType(), r.GetKey(), r.GetRevision())
-				r.GetValue()
+				log.Debugf("KeyValProtoWatcher received %v: %s=%s prev=%s(rev %d)",
+					r.GetChangeType(), r.GetKey(), string(r.GetValue()), string(r.GetPrevValue()), r.GetRevision())
+
 			}
 		} else {
 			log.Error("Something wrong with Watch channel... bail out")
@@ -531,7 +532,7 @@ func TestBrokerClosed(t *testing.T) {
 	txn = bytesConn.NewTxn()
 	gomega.Expect(txn).Should(gomega.BeNil())
 
-	bytesConn.Watch(keyval.ToChan(respChan), "key")
+	bytesConn.Watch(keyval.ToChan(respChan), nil, "key")
 
 	// bytesBrokerWatcher
 	err = bytesBrokerWatcher.Put("any", []byte("any"))
@@ -553,7 +554,7 @@ func TestBrokerClosed(t *testing.T) {
 	txn2 = bytesBrokerWatcher.NewTxn()
 	gomega.Expect(txn2).Should(gomega.BeNil())
 
-	bytesBrokerWatcher.Watch(keyval.ToChan(respChan), "key")
+	bytesBrokerWatcher.Watch(keyval.ToChan(respChan), nil, "key")
 
 	err = safeclose.Close(bytesConn)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())

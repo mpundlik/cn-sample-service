@@ -21,10 +21,15 @@ import (
 	"github.com/ligato/cn-infra/flavors/local"
 )
 
-// Plugin implements Plugin interface therefore can be loaded with other plugins
+const (
+	singleResyncTimeout = time.Second * 5
+)
+
+// Plugin implements Plugin interface, therefore it can be loaded with other plugins.
 type Plugin struct {
 	Deps
 
+	regOrder      []string
 	registrations map[string]Registration
 	access        sync.Mutex
 }
@@ -35,7 +40,7 @@ type Deps struct {
 	local.PluginLogDeps // inject
 }
 
-// Init initializes variables
+// Init initializes variables.
 func (plugin *Plugin) Init() (err error) {
 	plugin.registrations = make(map[string]Registration)
 
@@ -46,7 +51,7 @@ func (plugin *Plugin) Init() (err error) {
 	return nil
 }
 
-// AfterInit method starts the resync
+// AfterInit method starts the resync.
 func (plugin *Plugin) AfterInit() (err error) {
 	plugin.startResync()
 
@@ -57,8 +62,10 @@ func (plugin *Plugin) AfterInit() (err error) {
 // TODO kill existing Resync timeout while agent is stopping
 func (plugin *Plugin) Close() error {
 	//TODO close error report channel
+
 	plugin.access.Lock()
 	defer plugin.access.Unlock()
+
 	plugin.registrations = make(map[string]Registration)
 
 	return nil
@@ -66,45 +73,56 @@ func (plugin *Plugin) Close() error {
 
 // Register function is supposed to be called in Init() by all VPP Agent plugins.
 // The plugins are supposed to load current state of their objects when newResync() is called.
-// But the actual CreateNewObjects(), DeleteObsoleteObjects() and ModifyExistingObjects() will be orchestrated
-// to ensure there is proper order of that. If an error occurs during Resync than new Resync is planned.
+// The actual CreateNewObjects(), DeleteObsoleteObjects() and ModifyExistingObjects() will be orchestrated
+// to ensure their proper order. If an error occurs during Resync, then new Resync is planned.
 func (plugin *Plugin) Register(resyncName string) Registration {
 	plugin.access.Lock()
 	defer plugin.access.Unlock()
 
 	if _, found := plugin.registrations[resyncName]; found {
-		plugin.Log.WithField("resyncName", resyncName).Panic("You are trying to register same resync twice")
+		plugin.Log.WithField("resyncName", resyncName).
+			Panic("You are trying to register same resync twice")
 		return nil
 	}
+	// ensure that resync is triggered in the same order as the plugins were registered
+	plugin.regOrder = append(plugin.regOrder, resyncName)
 
 	reg := NewRegistration(resyncName, make(chan StatusEvent, 0)) /*Zero to have back pressure*/
 	plugin.registrations[resyncName] = reg
+
 	return reg
 }
 
-// call callback on plugins to create/delete/modify objects
+// Call callback on plugins to create/delete/modify objects.
 func (plugin *Plugin) startResync() {
+	plugin.Log.Info("Resync order", plugin.regOrder)
 
-	startTime := time.Now()
-	for regName, reg := range plugin.registrations {
-		resyncPartStart := time.Now()
+	startResyncTime := time.Now()
 
-		plugin.startSingleResync(regName, reg)
+	for _, regName := range plugin.regOrder {
+		if reg, found := plugin.registrations[regName]; found {
+			startPartTime := time.Now()
 
-		resyncPart := time.Since(resyncPartStart)
-		plugin.Log.WithField("durationInNs", resyncPart.Nanoseconds()).Info("Resync of ", regName, " took ", resyncPart)
+			plugin.startSingleResync(regName, reg)
+
+			took := time.Since(startPartTime)
+			plugin.Log.WithField("durationInNs", took.Nanoseconds()).
+				Infof("Resync of %v took %v", regName, took)
+		}
 	}
 
-	resyncTime := time.Since(startTime)
-	plugin.Log.WithField("durationInNs", resyncTime.Nanoseconds()).Info("Resync took ", resyncTime)
+	took := time.Since(startResyncTime)
+	plugin.Log.WithField("durationInNs", took.Nanoseconds()).Info("Resync took ", took)
+
 	// TODO check if there ReportError (if not than report) if error occurred even during Resync
 }
 func (plugin *Plugin) startSingleResync(resyncName string, reg Registration) {
 	started := newStatusEvent(Started)
 	reg.StatusChan() <- started
+
 	select {
 	case <-started.ReceiveAck():
-	case <-time.After(5 * time.Second):
+	case <-time.After(singleResyncTimeout):
 		plugin.Log.WithField("regName", resyncName).Warn("Timeout of ACK")
 	}
 }

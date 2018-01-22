@@ -14,16 +14,14 @@
 
 package syncbase
 
-import (
-	"github.com/ligato/cn-infra/logging/logroot"
-)
+import "github.com/ligato/cn-infra/logging/logrus"
 
 // NewDoneChannel creates a new instance of DoneChannel.
 func NewDoneChannel(doneChan chan error) *DoneChannel {
 	return &DoneChannel{doneChan}
 }
 
-// DoneChannel is small reusable part that is embedded to other events using composition.
+// DoneChannel is a small reusable part that is embedded to other events using composition.
 // It implements datasync.CallbackResult.
 type DoneChannel struct {
 	DoneChan chan error
@@ -36,31 +34,32 @@ func (ev *DoneChannel) Done(err error) {
 		case ev.DoneChan <- err:
 			//sent successfully
 		default:
-			logroot.StandardLogger().Debug("Nobody is listening anymore")
+			logrus.DefaultLogger().Debug("Nobody is listening anymore")
 		}
 	} else if err != nil {
-		logroot.StandardLogger().Error(err)
+		logrus.DefaultLogger().Error(err)
 	}
 }
 
-// DoneCallback is small reusable part that is embedded to other events using composition.
+// DoneCallback is a small reusable part that is embedded to other events using composition.
 // It implements datasync.CallbackResult.
 type DoneCallback struct {
 	Callback func(error)
 }
 
-// Done propagates error to the callback
+// Done propagates error to the callback.
 func (ev *DoneCallback) Done(err error) {
 	if ev.Callback != nil {
 		ev.Callback(err)
 	} else if err != nil {
-		logroot.StandardLogger().Error(err)
+		logrus.DefaultLogger().Error(err)
 	}
 }
 
-// AggregateDone can be reused to avoid repetitive code that triggers slice of events and waits until it is finished
+// AggregateDone can be reused to avoid repetitive code that triggers a slice of events and waits until it is finished.
 func AggregateDone(events []func(chan error), done chan error) {
 	partialDone := make(chan error, 5)
+
 	go collectDoneEvents(partialDone, done, len(events))
 
 	for _, event := range events {
@@ -80,10 +79,11 @@ func collectDoneEvents(partialDone, done chan error, evCount int) {
 				lastError = doneEv
 			}
 			if numDone >= evCount {
-				logroot.StandardLogger().Debug("TX Done - all events callbacks received")
+				logrus.DefaultLogger().Debug("TX Done - all events callbacks received")
 				break
 			}
 		}
 	}
+
 	done <- lastError
 }

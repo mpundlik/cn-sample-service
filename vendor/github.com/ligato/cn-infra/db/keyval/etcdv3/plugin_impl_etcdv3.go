@@ -15,8 +15,8 @@
 package etcdv3
 
 import (
+	"fmt"
 	"github.com/ligato/cn-infra/core"
-	"github.com/ligato/cn-infra/db/keyval"
 	"github.com/ligato/cn-infra/db/keyval/plugin"
 	"github.com/ligato/cn-infra/flavors/local"
 	"github.com/ligato/cn-infra/health/statuscheck"
@@ -34,7 +34,7 @@ type Plugin struct {
 	Deps // inject
 	*plugin.Skeleton
 	disabled   bool
-	connection keyval.CoreBrokerWatcher
+	connection *BytesConnectionEtcd
 }
 
 // Deps lists dependencies of the etcdv3 plugin.
@@ -46,11 +46,11 @@ type Deps struct {
 // Init retrieves etcd configuration and establishes a new connection
 // with the etcd data store.
 // If the configuration file doesn't exist or cannot be read, the returned error
-// will be of type os.PathError. An untyped error is returned in case the file
+// will be of os.PathError type. An untyped error is returned in case the file
 // doesn't contain a valid YAML configuration.
 // The function may also return error if TLS connection is selected and the
 // CA or client certificate is not accessible(os.PathError)/valid(untyped).
-// Check clientv3.New from coreos/etcd for possible errors returned when
+// Check clientv3.New from coreos/etcd for possible errors returned in case
 // the connection cannot be established.
 func (p *Plugin) Init() (err error) {
 	// Init connection
@@ -86,7 +86,7 @@ func (p *Plugin) Init() (err error) {
 		return err
 	}
 
-	// Register for providing status reports (polling mode)
+	// Register for providing status reports (polling mode).
 	if p.StatusCheck != nil {
 		p.StatusCheck.Register(core.PluginName(p.String()), func() (statuscheck.PluginState, error) {
 			_, _, _, err := p.connection.GetValue(healthCheckProbeKey)
@@ -112,10 +112,10 @@ func (p *Plugin) AfterInit() error {
 	return nil
 }
 
-// FromExistingConnection is used mainly for testing to inject existing
-// connection into the plugin.
+// FromExistingConnection is used mainly for testing of existing connection
+// injection into the plugin.
 // Note, need to set Deps for returned value!
-func FromExistingConnection(connection keyval.CoreBrokerWatcher, sl servicelabel.ReaderAPI) *Plugin {
+func FromExistingConnection(connection *BytesConnectionEtcd, sl servicelabel.ReaderAPI) *Plugin {
 	skel := plugin.NewSkeleton("testing", sl, connection)
 	return &Plugin{Skeleton: skel, connection: connection}
 }
@@ -139,4 +139,13 @@ func (p *Plugin) String() string {
 // etcd configuration.
 func (p *Plugin) Disabled() (disabled bool) {
 	return p.disabled
+}
+
+// PutIfNotExists puts given key-value pair into etcd if there is no value set for the key. If the put was successful
+// succeeded is true. If the key already exists succeeded is false and the value for the key is untouched.
+func (p *Plugin) PutIfNotExists(key string, value []byte) (succeeded bool, err error) {
+	if p.connection != nil {
+		return p.connection.PutIfNotExists(key, value)
+	}
+	return false, fmt.Errorf("The connection is not established")
 }

@@ -21,41 +21,24 @@ import (
 	"strings"
 	"time"
 
+	"fmt"
+
 	"github.com/ligato/cn-infra/datasync"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
+	"github.com/ligato/cn-infra/utils/safeclose"
 )
 
-// NewRegistry creates reusable registry of subscriptions for a particular datasync plugin.
-func NewRegistry() *Registry {
-	return &Registry{subscriptions: map[string]*Subscription{}, access: sync.Mutex{}, lastRev: NewLatestRev()}
-}
+const (
+	propagateChangesTimeout = time.Second * 20
+)
 
 // Registry of subscriptions and latest revisions.
 // This structure contains extracted reusable code among various datasync implementations.
-// By having this code datasync plugins do not need to repeat code related management of subscriptions.
+// Because of this code, datasync plugins does not need to repeat code related management of subscriptions.
 type Registry struct {
 	subscriptions map[string]*Subscription
 	access        sync.Mutex
 	lastRev       *PrevRevisions
-}
-
-// WatchDataReg implements interface datasync.WatchDataRegistration
-type WatchDataReg struct {
-	ResyncName string
-	adapter    *Registry
-	CloseChan  chan interface{}
-}
-
-// Close stops watching of particular KeyPrefixes.
-func (reg *WatchDataReg) Close() error {
-	reg.adapter.access.Lock()
-	defer reg.adapter.access.Unlock()
-
-	delete(reg.adapter.subscriptions, reg.ResyncName)
-
-	reg.CloseChan <- nil
-
-	return nil
 }
 
 // Subscription TODO
@@ -63,10 +46,43 @@ type Subscription struct {
 	ResyncName  string
 	ChangeChan  chan datasync.ChangeEvent
 	ResyncChan  chan datasync.ResyncEvent
+	CloseChan   chan string
 	KeyPrefixes []string
 }
 
-// WatchDataBase just appends channels
+// WatchDataReg implements interface datasync.WatchDataRegistration.
+type WatchDataReg struct {
+	ResyncName string
+	adapter    *Registry
+}
+
+// NewRegistry creates reusable registry of subscriptions for a particular datasync plugin.
+func NewRegistry() *Registry {
+	return &Registry{
+		subscriptions: map[string]*Subscription{},
+		access:        sync.Mutex{},
+		lastRev:       NewLatestRev(),
+	}
+}
+
+// Subscriptions returns the current subscriptions.
+func (adapter *Registry) Subscriptions() map[string]*Subscription {
+	return adapter.subscriptions
+}
+
+// LastRev is only a getter.
+func (adapter *Registry) LastRev() *PrevRevisions {
+	return adapter.lastRev
+}
+
+// Watch only appends channels.
+func (adapter *Registry) Watch(resyncName string, changeChan chan datasync.ChangeEvent,
+	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (datasync.WatchRegistration, error) {
+
+	return adapter.WatchDataBase(resyncName, changeChan, resyncChan, keyPrefixes...)
+}
+
+// WatchDataBase only appends channels.
 func (adapter *Registry) WatchDataBase(resyncName string, changeChan chan datasync.ChangeEvent,
 	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (*WatchDataReg, error) {
 
@@ -77,57 +93,51 @@ func (adapter *Registry) WatchDataBase(resyncName string, changeChan chan datasy
 		return nil, errors.New("Already watching " + resyncName)
 	}
 
-	reg := &WatchDataReg{ResyncName: resyncName, adapter: adapter, CloseChan: make(chan interface{}, 1)}
 	adapter.subscriptions[resyncName] = &Subscription{
-		resyncName, changeChan,
-		resyncChan, keyPrefixes,
+		ResyncName:  resyncName,
+		ChangeChan:  changeChan,
+		ResyncChan:  resyncChan,
+		CloseChan:   make(chan string),
+		KeyPrefixes: keyPrefixes,
 	}
 
-	return reg, nil
+	return &WatchDataReg{resyncName, adapter}, nil
 }
 
-// Watch just appends channels
-func (adapter *Registry) Watch(resyncName string, changeChan chan datasync.ChangeEvent,
-	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (datasync.WatchRegistration, error) {
-	return adapter.WatchDataBase(resyncName, changeChan, resyncChan, keyPrefixes...)
-}
-
-// Subscriptions returns the current subscriptions.
-func (adapter *Registry) Subscriptions() map[string]*Subscription {
-	return adapter.subscriptions
-}
-
-// LastRev is just getter
-func (adapter *Registry) LastRev() *PrevRevisions {
-	return adapter.lastRev
-}
-
-// PropagateChanges fills registered channels with the data
+// PropagateChanges fills registered channels with the data.
 func (adapter *Registry) PropagateChanges(txData map[string] /*key*/ datasync.ChangeValue) error {
-	events := []func(done chan error){}
+	var events []func(done chan error)
 
 	for _, sub := range adapter.subscriptions {
 		for _, prefix := range sub.KeyPrefixes {
 			for key, val := range txData {
+				var (
+					prev   datasync.LazyValueWithRev
+					curRev int64
+				)
+
 				if strings.HasPrefix(key, prefix) {
-					var prev datasync.LazyValueWithRev
-					var curRev int64
-					if datasync.Delete == val.GetChangeType() {
-						_, prev = adapter.lastRev.Del(key)
-						if prev != nil {
+					if val.GetChangeType() == datasync.Delete {
+						if _, prev = adapter.lastRev.Del(key); prev != nil {
 							curRev = prev.GetRevision() + 1
 						}
 					} else {
 						_, prev, curRev = adapter.lastRev.Put(key, val)
 					}
 
-					events = append(events,
-						func(sub *Subscription, key string, val datasync.ChangeValue) func(done chan error) {
-							return func(done chan error) {
-								sub.ChangeChan <- &ChangeEvent{key, val.GetChangeType(),
-									val, curRev, prev, NewDoneChannel(done)}
+					sendTo := func(sub *Subscription, key string, val datasync.ChangeValue) func(done chan error) {
+						return func(done chan error) {
+							sub.ChangeChan <- &ChangeEvent{
+								Key:        key,
+								ChangeType: val.GetChangeType(),
+								CurrVal:    val,
+								CurrRev:    curRev,
+								PrevVal:    prev,
+								delegate:   NewDoneChannel(done),
 							}
-						}(sub, key, val))
+						}
+					}
+					events = append(events, sendTo(sub, key, val))
 				}
 			}
 		}
@@ -141,29 +151,80 @@ func (adapter *Registry) PropagateChanges(txData map[string] /*key*/ datasync.Ch
 		if err != nil {
 			return err
 		}
-	case <-time.After(5 * time.Second):
-		logroot.StandardLogger().Warn("Timeout of aggregated change callback")
+	case <-time.After(propagateChangesTimeout):
+		logrus.DefaultLogger().Warn("Timeout of aggregated change callback")
 	}
 
 	return nil
 }
 
-// PropagateResync fills registered channels with the data
+// PropagateResync fills registered channels with the data.
 func (adapter *Registry) PropagateResync(txData map[ /*key*/ string]datasync.ChangeValue) error {
 	for _, sub := range adapter.subscriptions {
 		resyncEv := NewResyncEventDB(map[string] /*keyPrefix*/ datasync.KeyValIterator{})
+
 		for _, prefix := range sub.KeyPrefixes {
-			kvs := []datasync.KeyVal{}
+			var kvs []datasync.KeyVal
+
 			for key, val := range txData {
 				if strings.HasPrefix(key, prefix) {
 					adapter.lastRev.PutWithRevision(key, val)
 					kvs = append(kvs, &KeyVal{key, val, val.GetRevision()})
 				}
 			}
+
 			resyncEv.its[prefix] = NewKVIterator(kvs)
 		}
 		sub.ResyncChan <- resyncEv //TODO default and/or timeout
 	}
 
 	return nil
+}
+
+// Close stops watching of particular KeyPrefixes.
+func (reg *WatchDataReg) Close() error {
+	reg.adapter.access.Lock()
+	defer reg.adapter.access.Unlock()
+
+	for _, sub := range reg.adapter.subscriptions {
+		// subscription should have also change channel, otherwise it is not registered
+		// for change events
+		if sub.ChangeChan != nil && sub.CloseChan != nil {
+			// close the channel with all goroutines under subscription
+			safeclose.Close(sub.CloseChan)
+		}
+	}
+
+	delete(reg.adapter.subscriptions, reg.ResyncName)
+
+	return nil
+}
+
+// Unregister stops watching of particular key prefix. Method returns error if key which should be removed
+// does not exist or in case the channel to close goroutine is nil
+func (reg *WatchDataReg) Unregister(keyPrefix string) error {
+	reg.adapter.access.Lock()
+	defer reg.adapter.access.Unlock()
+
+	subs := reg.adapter.subscriptions[reg.ResyncName]
+	// verify if key is registered for change events
+	if subs.ChangeChan == nil {
+		// not an error
+		logrus.DefaultLogger().Infof("key %v not registered for change events", keyPrefix)
+		return nil
+	}
+	if subs.CloseChan == nil {
+		return fmt.Errorf("unable to unregister key %v, close channel in subscription is nil", keyPrefix)
+	}
+
+	for index, prefix := range subs.KeyPrefixes {
+		if prefix == keyPrefix {
+			subs.KeyPrefixes = append(subs.KeyPrefixes[:index], subs.KeyPrefixes[index+1:]...)
+			subs.CloseChan <- keyPrefix
+			logrus.DefaultLogger().WithField("resyncName", reg.ResyncName).Infof("Key %v removed from subscription", keyPrefix)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("key %v to unregister was not found", keyPrefix)
 }

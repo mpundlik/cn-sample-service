@@ -16,14 +16,12 @@ package grpcsync
 
 import (
 	"github.com/ligato/cn-infra/datasync"
+	"github.com/ligato/cn-infra/logging/logrus"
 
 	//TODO "github.com/gorilla/rpc/json"
-	"fmt"
-	"net"
 
 	"github.com/ligato/cn-infra/datasync/syncbase"
 	"github.com/ligato/cn-infra/datasync/syncbase/msg"
-	"github.com/ligato/cn-infra/logging/logroot"
 	"google.golang.org/grpc"
 )
 
@@ -37,22 +35,22 @@ func NewAdapter(grpcServer *grpc.Server) *Adapter {
 	return adapter
 }
 
-// Adapter is a GRPC transport adapter in front of Agent Plugins
+// Adapter is a gRPC transport adapter in front of Agent Plugins.
 type Adapter struct {
 	base   *syncbase.Registry
 	server *grpc.Server
 }
 
-// Watch registers HTTP handlers - basically bridges them with local dbadapter
+// Watch registers HTTP handlers - basically bridges them with local dbadapter.
 func (adapter *Adapter) Watch(resyncName string, changeChan chan datasync.ChangeEvent,
 	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (datasync.WatchRegistration, error) {
 
-	logroot.StandardLogger().Debug("GRPC KeyValProtoWatcher WatchData ", resyncName, " ", keyPrefixes)
+	logrus.DefaultLogger().Debug("GRPC KeyValProtoWatcher WatchData ", resyncName, " ", keyPrefixes)
 
 	return adapter.base.Watch(resyncName, changeChan, resyncChan, keyPrefixes...)
 }
 
-// Close closes the grpc server.
+// Close closes the gRPC server.
 func (adapter *Adapter) Close() error {
 	adapter.server.Stop()
 	return nil

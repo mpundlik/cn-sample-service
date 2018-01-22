@@ -15,12 +15,12 @@ import (
 	"github.com/ligato/cn-infra/db/keyval"
 	"github.com/ligato/cn-infra/db/keyval/redis"
 	"github.com/ligato/cn-infra/logging"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 	"github.com/ligato/cn-infra/utils/safeclose"
 	"github.com/namsral/flag"
 )
 
-var log = logroot.StandardLogger()
+var log = logrus.DefaultLogger()
 
 var redisConn *redis.BytesConnectionRedis
 var broker keyval.BytesBroker
@@ -120,7 +120,7 @@ func runSimpleExmple() {
 	}
 
 	respChan := make(chan keyval.BytesWatchResp, 10)
-	err = watcher.Watch(keyval.ToChan(respChan), keyPrefix)
+	err = watcher.Watch(keyval.ToChan(respChan), make(chan string), keyPrefix)
 	if err != nil {
 		log.Error(err.Error())
 	}

@@ -23,7 +23,7 @@ import (
 	"github.com/ligato/cn-infra/datasync"
 	"github.com/ligato/cn-infra/db/keyval"
 	"github.com/ligato/cn-infra/db/keyval/etcdv3/mocks"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 	"github.com/onsi/gomega"
 )
 
@@ -56,6 +56,8 @@ func TestDataBroker(t *testing.T) {
 	t.Run("txn", testPrefixedTxn)
 	embd.CleanDs()
 	t.Run("testDelWithPrefix", testDelWithPrefix)
+	embd.CleanDs()
+	t.Run("testPutIfNotExist", testPutIfNotExists)
 }
 
 func teardownBrokers() {
@@ -71,7 +73,7 @@ func testPutGetValuePrefixed(t *testing.T) {
 
 	data := []byte{1, 2, 3}
 
-	// insert key-value pair using databroker
+	// Insert key-value pair using databroker.
 	err := broker.Put(prefix+key, data)
 	gomega.Expect(err).To(gomega.BeNil())
 
@@ -94,17 +96,17 @@ func testPrefixedWatcher(t *testing.T) {
 	defer teardownBrokers()
 
 	watchCh := make(chan keyval.BytesWatchResp)
-	err := prefixedWatcher.Watch(keyval.ToChan(watchCh), watchKey)
+	err := prefixedWatcher.Watch(keyval.ToChan(watchCh), nil, watchKey)
 	gomega.Expect(err).To(gomega.BeNil())
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go expectWatchEvent(t, &wg, watchCh, watchKey+"val1")
 
-	// insert kv that doesn't match the watcher subscription
+	// Insert kv that doesn't match the watcher subscription.
 	broker.Put(prefix+"/something/else/val1", []byte{0, 0, 7})
 
-	// insert kv for watcher
+	// Insert kv for watcher.
 	broker.Put(prefix+watchKey+"val1", []byte{0, 0, 7})
 
 	wg.Wait()
@@ -140,7 +142,7 @@ func testPrefixedListValues(t *testing.T) {
 	defer teardownBrokers()
 
 	var err error
-	// insert values using databroker
+	// Insert values using databroker.
 	err = broker.Put(prefix+"a/val1", []byte{0, 0, 7})
 	gomega.Expect(err).To(gomega.BeNil())
 	err = broker.Put(prefix+"a/val2", []byte{0, 0, 7})
@@ -148,7 +150,7 @@ func testPrefixedListValues(t *testing.T) {
 	err = broker.Put(prefix+"a/val3", []byte{0, 0, 7})
 	gomega.Expect(err).To(gomega.BeNil())
 
-	// list values using pluginDatabroker
+	// List values using pluginDatabroker.
 	kvi, err := prefixedBroker.ListValues("a")
 	gomega.Expect(err).To(gomega.BeNil())
 	gomega.Expect(kvi).NotTo(gomega.BeNil())
@@ -203,6 +205,55 @@ func testDelWithPrefix(t *testing.T) {
 
 }
 
+func testPutIfNotExists(t *testing.T) {
+
+	conn, err := NewEtcdConnectionUsingClient(v3client.New(embd.ETCD.Server), logrus.DefaultLogger())
+
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(conn).NotTo(gomega.BeNil())
+
+	const key = "myKey"
+	var (
+		intialValue  = []byte("abcd")
+		changedValue = []byte("modified")
+	)
+
+	_, found, _, err := conn.GetValue(key)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(found).To(gomega.BeFalse())
+
+	inserted, err := conn.PutIfNotExists(key, intialValue)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(inserted).To(gomega.BeTrue())
+
+	data, found, _, err := conn.GetValue(key)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(found).To(gomega.BeTrue())
+	gomega.Expect(string(data)).To(gomega.BeEquivalentTo(string(intialValue)))
+
+	inserted, err = conn.PutIfNotExists(key, changedValue)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(inserted).To(gomega.BeFalse())
+
+	data, found, _, err = conn.GetValue(key)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(found).To(gomega.BeTrue())
+	gomega.Expect(string(data)).To(gomega.BeEquivalentTo(string(intialValue)))
+
+	_, err = conn.Delete(key)
+	gomega.Expect(err).To(gomega.BeNil())
+
+	inserted, err = conn.PutIfNotExists(key, changedValue)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(inserted).To(gomega.BeTrue())
+
+	data, found, _, err = conn.GetValue(key)
+	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(found).To(gomega.BeTrue())
+	gomega.Expect(string(data)).To(gomega.BeEquivalentTo(string(changedValue)))
+
+}
+
 func expectWatchEvent(t *testing.T, wg *sync.WaitGroup, watchCh chan keyval.BytesWatchResp, expectedKey string) {
 	select {
 	case resp := <-watchCh:
@@ -217,11 +268,11 @@ func expectWatchEvent(t *testing.T, wg *sync.WaitGroup, watchCh chan keyval.Byte
 
 func setupBrokers(t *testing.T) {
 	var err error
-	broker, err = NewEtcdConnectionUsingClient(v3client.New(embd.ETCD.Server), logroot.StandardLogger())
+	broker, err = NewEtcdConnectionUsingClient(v3client.New(embd.ETCD.Server), logrus.DefaultLogger())
 
 	gomega.Expect(err).To(gomega.BeNil())
 	gomega.Expect(broker).NotTo(gomega.BeNil())
-	// create BytesBrokerWatcherEtcd with prefix
+	// Create BytesBrokerWatcherEtcd with prefix.
 	prefixedBroker = broker.NewBroker(prefix)
 	prefixedWatcher = broker.NewWatcher(prefix)
 	gomega.Expect(prefixedBroker).NotTo(gomega.BeNil())

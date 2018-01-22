@@ -19,14 +19,16 @@ import (
 
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/datasync"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging"
+	"github.com/ligato/cn-infra/logging/logrus"
 )
 
-// BytesWatcher define API for monitoring changes in datastore.
+// BytesWatcher defines API for monitoring changes in datastore.
 type BytesWatcher interface {
 	// Watch starts subscription for changes associated with the selected keys.
 	// Watch events will be delivered to callback (not channel) <respChan>.
-	Watch(respChan func(BytesWatchResp), keys ...string) error
+	// Channel <closeChan> can be used to close watching on respective key
+	Watch(respChan func(BytesWatchResp), closeChan chan string, keys ...string) error
 }
 
 // BytesWatchResp represents a notification about data change.
@@ -38,12 +40,12 @@ type BytesWatchResp interface {
 }
 
 // ToChan creates a callback that can be passed to the Watch function in order
-// to receive notifications through a channel. If the notification can not be
+// to receive notifications through a channel. If the notification cannot be
 // delivered until timeout, it is dropped.
 func ToChan(ch chan BytesWatchResp, opts ...interface{}) func(dto BytesWatchResp) {
 
 	timeout := datasync.DefaultNotifTimeout
-	logger := logroot.StandardLogger()
+	var logger logging.Logger = logrus.DefaultLogger()
 
 	for _, opt := range opts {
 		switch opt.(type) {

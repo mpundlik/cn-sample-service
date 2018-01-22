@@ -17,29 +17,28 @@ package syncbase
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/ligato/cn-infra/datasync"
-
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 )
 
-// Adapter implements datasync.TransportAdapter but allows optionally implement these Watch / Put
+// Adapter implements datasync.TransportAdapter but allows the Watch/ Put functions to be optionally implemented.
 type Adapter struct {
 	Watcher   datasync.KeyValProtoWatcher
 	Publisher datasync.KeyProtoValWriter
 }
 
-// Watch using Kafka KeyValProtoWatcher Topic KeyValProtoWatcher
+// Watch uses Kafka KeyValProtoWatcher Topic KeyValProtoWatcher.
 func (adapter *Adapter) Watch(resyncName string, changeChan chan datasync.ChangeEvent,
 	resyncChan chan datasync.ResyncEvent, keyPrefixes ...string) (datasync.WatchRegistration, error) {
 
 	if adapter.Watcher != nil {
 		return adapter.Watcher.Watch(resyncName, changeChan, resyncChan, keyPrefixes...)
 	}
-	logroot.StandardLogger().Debug("KeyValProtoWatcher is nil")
+	logrus.DefaultLogger().Debug("KeyValProtoWatcher is nil")
 
 	return nil, nil
 }
 
-// Put using Kafka KeyValProtoWatcher Topic KeyProtoValWriter
+// Put uses Kafka KeyValProtoWatcher Topic KeyProtoValWriter.
 func (adapter *Adapter) Put(key string, data proto.Message) error {
 	if adapter.Publisher != nil {
 		return adapter.Publisher.Put(key, data)

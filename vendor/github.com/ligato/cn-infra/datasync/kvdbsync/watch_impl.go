@@ -21,10 +21,14 @@ import (
 	"github.com/ligato/cn-infra/datasync/resync"
 	"github.com/ligato/cn-infra/datasync/syncbase"
 	"github.com/ligato/cn-infra/db/keyval"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 )
 
-// WatchBrokerKeys implements go routines on top of Change & Resync channels
+const (
+	resyncTimeout = time.Second * 15
+)
+
+// WatchBrokerKeys implements go routines on top of Change & Resync channels.
 type watchBrokerKeys struct {
 	resyncReg  resync.Registration
 	changeChan chan datasync.ChangeEvent
@@ -39,30 +43,31 @@ type watcher struct {
 	base *syncbase.Registry
 }
 
-// WatchAndResyncBrokerKeys calls keyval watcher Watch() & resync Register()
-// This creates go routines for each tuple changeChan+resyncChan.
+// WatchAndResyncBrokerKeys calls keyval watcher Watch() & resync Register().
+// This creates go routines for each tuple changeChan + resyncChan.
 func watchAndResyncBrokerKeys(resyncReg resync.Registration, changeChan chan datasync.ChangeEvent, resyncChan chan datasync.ResyncEvent,
-	adapter *watcher, keyPrefixes ...string) (*watchBrokerKeys, error) {
-
-	var wasError error
-
-	keys := &watchBrokerKeys{
+	closeChan chan string, adapter *watcher, keyPrefixes ...string) (keys *watchBrokerKeys, err error) {
+	keys = &watchBrokerKeys{
 		resyncReg:  resyncReg,
 		changeChan: changeChan,
 		resyncChan: resyncChan,
 		adapter:    adapter,
-		prefixes:   keyPrefixes}
+		prefixes:   keyPrefixes,
+	}
 
+	var wasErr error
+	if err := keys.resyncRev(); err != nil {
+		wasErr = err
+	}
 	if resyncReg != nil {
 		go keys.watchResync(resyncReg)
 	}
 	if changeChan != nil {
-		err := keys.adapter.dbW.Watch(keys.watchChanges, keys.prefixes...)
-		if err != nil {
-			wasError = err
+		if err := keys.adapter.dbW.Watch(keys.watchChanges, closeChan, keys.prefixes...); err != nil {
+			wasErr = err
 		}
 	}
-	return keys, wasError
+	return keys, wasErr
 }
 
 func (keys *watchBrokerKeys) watchChanges(x keyval.ProtoWatchResp) {
@@ -76,8 +81,8 @@ func (keys *watchBrokerKeys) watchChanges(x keyval.ProtoWatchResp) {
 
 	ch := NewChangeWatchResp(x, prev)
 
-	logroot.StandardLogger().Debug("dbAdapter x:", x)
-	logroot.StandardLogger().Debug("dbAdapter ch:", *ch)
+	logrus.DefaultLogger().Debug("dbAdapter x:", x)
+	logrus.DefaultLogger().Debug("dbAdapter ch:", *ch)
 
 	keys.changeChan <- ch
 	// TODO NICE-to-HAVE publish the err using the transport asynchronously
@@ -89,7 +94,7 @@ func (keys *watchBrokerKeys) watchResync(resyncReg resync.Registration) {
 		if resyncStatus.ResyncStatus() == resync.Started {
 			err := keys.resync()
 			if err != nil {
-				logroot.StandardLogger().Error("error getting resync data ", err) //we are not able to propagate it somewhere else
+				logrus.DefaultLogger().Error("error getting resync data ", err) // We are not able to propagate it somewhere else.
 				// TODO NICE-to-HAVE publish the err using the transport asynchronously
 			}
 		}
@@ -97,18 +102,39 @@ func (keys *watchBrokerKeys) watchResync(resyncReg resync.Registration) {
 	}
 }
 
-// Resync fills the resyncChan with most recent snapshot (db.ListValues)
+// ResyncRev fill the PrevRevision map. This step needs to be done even if resync is ommited
+func (keys *watchBrokerKeys) resyncRev() error {
+	for _, keyPrefix := range keys.prefixes {
+		revIt, err := keys.adapter.db.ListValues(keyPrefix)
+		if err != nil {
+			return err
+		}
+		// if there are data for given prefix, register it
+		for {
+			data, stop := revIt.GetNext()
+			if stop {
+				break
+			}
+			logrus.DefaultLogger().Debugf("registering key found in etcd %v", data.GetKey())
+			keys.adapter.base.LastRev().PutWithRevision(data.GetKey(), syncbase.NewKeyVal(data.GetKey(), data, data.GetRevision()))
+		}
+	}
+
+	return nil
+}
+
+// Resync fills the resyncChan with the most recent snapshot (db.ListValues).
 func (keys *watchBrokerKeys) resync() error {
-	its := map[string] /*keyPrefix*/ datasync.KeyValIterator{}
+	iterators := map[string] /*keyPrefix*/ datasync.KeyValIterator{}
 	for _, keyPrefix := range keys.prefixes {
 		it, err := keys.adapter.db.ListValues(keyPrefix)
 		if err != nil {
 			return err
 		}
-		its[keyPrefix] = NewIterator(it)
+		iterators[keyPrefix] = NewIterator(it)
 	}
 
-	resyncEvent := syncbase.NewResyncEventDB(its)
+	resyncEvent := syncbase.NewResyncEventDB(iterators)
 	keys.resyncChan <- resyncEvent
 
 	select {
@@ -116,13 +142,13 @@ func (keys *watchBrokerKeys) resync() error {
 		if err != nil {
 			return err
 		}
-	case <-time.After(4 * time.Second):
-		logroot.StandardLogger().Warn("Timeout of resync callback")
+	case <-time.After(resyncTimeout):
+		logrus.DefaultLogger().Warn("Timeout of resync callback")
 	}
 	return nil
 }
 
-// String returns resyncName
+// String returns resyncName.
 func (keys *watchBrokerKeys) String() string {
 	return keys.resyncReg.String()
 }

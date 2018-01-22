@@ -17,10 +17,10 @@ package syncbase
 import (
 	"github.com/golang/protobuf/proto"
 	"github.com/ligato/cn-infra/datasync"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 )
 
-// ChangeEvent is a simple structure that implements interface datasync.ChangeEvent
+// ChangeEvent is a simple structure that implements interface datasync.ChangeEvent.
 type ChangeEvent struct {
 	Key        string
 	ChangeType datasync.PutDel
@@ -35,7 +35,7 @@ func (ev *ChangeEvent) GetChangeType() datasync.PutDel {
 	return ev.ChangeType
 }
 
-// GetKey returns the Key associated with the change
+// GetKey returns the Key associated with the change.
 func (ev *ChangeEvent) GetKey() string {
 	return ev.Key
 }
@@ -50,7 +50,7 @@ func (ev *ChangeEvent) GetRevision() int64 {
 	return ev.CurrRev
 }
 
-// GetPrevValue returns the value before change
+// GetPrevValue returns the value before change.
 func (ev *ChangeEvent) GetPrevValue(prevVal proto.Message) (prevExists bool, err error) {
 	if prevVal != nil && ev.PrevVal != nil {
 		return true, ev.PrevVal.GetValue(prevVal)
@@ -58,11 +58,11 @@ func (ev *ChangeEvent) GetPrevValue(prevVal proto.Message) (prevExists bool, err
 	return false, err
 }
 
-// Done val the call or logs err if there is no val & error occurred
+// Done propagates call to delegate. If the delegate is nil, then the error is logged (if occurred).
 func (ev *ChangeEvent) Done(err error) {
 	if ev.delegate != nil {
 		ev.delegate.Done(err)
 	} else if err != nil {
-		logroot.StandardLogger().Error(err)
+		logrus.DefaultLogger().Error(err)
 	}
 }

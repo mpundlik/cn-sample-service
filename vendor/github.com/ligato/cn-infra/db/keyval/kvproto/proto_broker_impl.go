@@ -62,8 +62,8 @@ func NewProtoWrapperWithSerializer(db keyval.CoreBrokerWatcher, serializer keyva
 	return &ProtoWrapper{db, serializer}
 }
 
-// Close closes underlying connection to etcd.
-// Beware: if the connection is shared among multiple instances this might
+// Close closes underlying connection to ETCD.
+// Beware: if the connection is shared among multiple instances, this might
 // unintentionally cancel the connection for them.
 func (db *ProtoWrapper) Close() error {
 	return db.broker.Close()
@@ -76,7 +76,7 @@ func (db *ProtoWrapper) NewBroker(prefix string) keyval.ProtoBroker {
 }
 
 // NewWatcher creates a new instance of the proxy that shares the underlying
-// connection and allows to subscribe for watching of the changes.
+// connection and allows subscribing for watching of the changes.
 func (db *ProtoWrapper) NewWatcher(prefix string) keyval.ProtoWatcher {
 	return &protoWatcher{db.broker.NewWatcher(prefix), db.serializer}
 }
@@ -100,13 +100,13 @@ func (pdb *protoBroker) NewTxn() keyval.ProtoTxn {
 }
 
 // Put writes the provided key-value item into the data store.
-// Returns an error if the item could not be written, nil otherwise.
+// It returns an error if the item could not be written, nil otherwise.
 func (db *ProtoWrapper) Put(key string, value proto.Message, opts ...datasync.PutOption) error {
 	return putProtoInternal(db.broker, db.serializer, key, value, opts...)
 }
 
 // Put writes the provided key-value item into the data store.
-// Returns an error if the item could not be written, nil otherwise.
+// It returns an error if the item could not be written, nil otherwise.
 func (pdb *protoBroker) Put(key string, value proto.Message, opts ...datasync.PutOption) error {
 	return putProtoInternal(pdb.broker, pdb.serializer, key, value, opts...)
 }
@@ -114,7 +114,7 @@ func (pdb *protoBroker) Put(key string, value proto.Message, opts ...datasync.Pu
 func putProtoInternal(broker keyval.BytesBroker, serializer keyval.Serializer, key string, value proto.Message,
 	opts ...datasync.PutOption) error {
 
-	// Marshal value to protobuf
+	// Marshal value to protobuf.
 	binData, err := serializer.Marshal(value)
 	if err != nil {
 		return err
@@ -123,22 +123,24 @@ func putProtoInternal(broker keyval.BytesBroker, serializer keyval.Serializer, k
 	return nil
 }
 
-// Delete removes from datastore key-value items stored under <key>.
+// Delete removes key-value items stored under <key> from datastore.
 func (db *ProtoWrapper) Delete(key string, opts ...datasync.DelOption) (existed bool, err error) {
 	return db.broker.Delete(key, opts...)
 }
 
-// Delete removes from datastore key-value items stored under <key>.
+// Delete removes key-value items stored under <key> from datastore.
 func (pdb *protoBroker) Delete(key string, opts ...datasync.DelOption) (existed bool, err error) {
 	return pdb.broker.Delete(key, opts...)
 }
 
 // Watch subscribes for changes in datastore associated with any of the <keys>.
 // Callback <resp> is used for delivery of watch events.
-func (db *ProtoWrapper) Watch(resp func(keyval.ProtoWatchResp), keys ...string) error {
+// Channel <closeChan> is used to close key-related goroutines
+// Any encountered error is returned as well
+func (db *ProtoWrapper) Watch(resp func(keyval.ProtoWatchResp), closeChan chan string, keys ...string) error {
 	return db.broker.Watch(func(msg keyval.BytesWatchResp) {
 		resp(NewWatchResp(db.serializer, msg))
-	}, keys...)
+	}, closeChan, keys...)
 }
 
 // GetValue retrieves one key-value item from the datastore. The item
@@ -201,14 +203,14 @@ func listValuesProtoInternal(broker keyval.BytesBroker, serializer keyval.Serial
 	return &protoKeyValIterator{ctx, serializer}, nil
 }
 
-// ListKeys returns an iterator that allows to traverse all keys from data
-// store that share the given <prefix>
+// ListKeys returns an iterator that allows to traverse all keys that share the given <prefix>
+// from data store.
 func (db *ProtoWrapper) ListKeys(prefix string) (keyval.ProtoKeyIterator, error) {
 	return listKeysProtoInternal(db.broker, prefix)
 }
 
-// ListKeys returns an iterator that allows to traverse all keys from data
-// store that share the given <prefix>
+// ListKeys returns an iterator that allows to traverse all keys that share the given <prefix>
+// from data store.
 func (pdb *protoBroker) ListKeys(prefix string) (keyval.ProtoKeyIterator, error) {
 	return listKeysProtoInternal(pdb.broker, prefix)
 }
@@ -222,7 +224,7 @@ func listKeysProtoInternal(broker keyval.BytesBroker, prefix string) (keyval.Pro
 }
 
 // Close does nothing since db cursors are not needed.
-// The method needs to be here to implement Iterator API.
+// The method is required by the code since it implements Iterator API.
 func (ctx *protoKeyValIterator) Close() error {
 	return nil
 }
@@ -240,14 +242,14 @@ func (ctx *protoKeyValIterator) GetNext() (kv keyval.ProtoKeyVal, stop bool) {
 }
 
 // Close does nothing since db cursors are not needed.
-// The method needs to be here to implement Iterator API.
+// The method is required in the code since it implements Iterator API.
 func (ctx *protoKeyIterator) Close() error {
 	return nil
 }
 
 // GetNext returns the following key from the result set.
 // When there are no more keys to get, <stop> is returned as *true*
-// and <key>, <rev> are default values.
+// and <key> and <rev> are default values.
 func (ctx *protoKeyIterator) GetNext() (key string, rev int64, stop bool) {
 	return ctx.delegate.GetNext()
 }
@@ -259,6 +261,19 @@ func (kv *protoKeyVal) GetValue(msg proto.Message) error {
 		return err
 	}
 	return nil
+}
+
+// GetPrevValue returns the previous value of the pair.
+func (kv *protoKeyVal) GetPrevValue(msg proto.Message) (prevValueExist bool, err error) {
+	prevVal := kv.pair.GetPrevValue()
+	if prevVal == nil {
+		return false, nil
+	}
+	err = kv.serializer.Unmarshal(prevVal, msg)
+	if err != nil {
+		return true, err
+	}
+	return true, nil
 }
 
 // GetKey returns the key of the pair.

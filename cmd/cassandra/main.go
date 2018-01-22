@@ -18,9 +18,8 @@ import (
 	"errors"
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/db/sql"
-	"github.com/ligato/cn-infra/logging/logroot"
 	"os"
-	"time"
+	"fmt"
 )
 
 // CassandraRestAPIPlugin is a plugin that showcase the extensibility of vpp agent.
@@ -41,11 +40,11 @@ func main() {
 	flavor.CassandraRestAPIPlugin.pluginCompleted = pluginCompleted
 
 	// Create new agent
-	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(flavor.Plugins())...)
+	agent := core.NewAgent(&flavor)
 
 	err := core.EventLoopWithInterrupt(agent, pluginCompleted)
 	if err != nil {
-		logroot.StandardLogger().Errorf("Error in event loop %v", err)
+		fmt.Errorf("Error in event loop %v", err)
 		os.Exit(1)
 	}
 }
@@ -140,7 +139,7 @@ func (plugin *CassandraRestAPIPlugin) setup() (err error) {
 		)`)
 
 	if err7 != nil {
-		logroot.StandardLogger().Errorf("Error creating user-defined type address %v", err7)
+		fmt.Errorf("Error creating user-defined type address %v", err7)
 		return err7
 	}
 

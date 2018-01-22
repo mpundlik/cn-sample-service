@@ -20,11 +20,11 @@ import (
 	"strings"
 
 	"github.com/ligato/cn-infra/datasync/syncbase/msg"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 	"golang.org/x/net/context"
 )
 
-// NewDataMsgServiceServer creates a new instance of DataMsgServiceServer
+// NewDataMsgServiceServer creates a new instance of DataMsgServiceServer.
 func NewDataMsgServiceServer(adapter *Adapter) *DataMsgServiceServer {
 	return &DataMsgServiceServer{adapter: adapter}
 }
@@ -34,7 +34,7 @@ type DataMsgServiceServer struct {
 	adapter *Adapter
 }
 
-// DataChanges propagates the events in the stream to go channels of registered plugins
+// DataChanges propagates the events in the stream to go channels of registered plugins.
 func (s *DataMsgServiceServer) DataChanges(stream msg.DataMsgService_DataChangesServer) error {
 	for {
 		chng, err := stream.Recv()
@@ -53,7 +53,7 @@ func (s *DataMsgServiceServer) DataChanges(stream msg.DataMsgService_DataChanges
 						err = stream.Send(&msg.DataChangeReply{Key: chng.Key, OperationType: chng.OperationType,
 							Result: 0 /*TODO VPP Result*/})
 						if err != nil {
-							logroot.StandardLogger().Error(err) //Not able to propagate it somewhere else
+							logrus.DefaultLogger().Error(err) //Not able to propagate it somewhere else
 						}
 					})
 				}
@@ -62,7 +62,7 @@ func (s *DataMsgServiceServer) DataChanges(stream msg.DataMsgService_DataChanges
 	}
 }
 
-// DataResyncs propagates the events in the stream to go channels of registered plugins
+// DataResyncs propagates the events in the stream to go channels of registered plugins.
 func (s *DataMsgServiceServer) DataResyncs(ctx context.Context, req *msg.DataResyncRequests) (
 	*msg.DataResyncReplies, error) {
 	resyncs := req.GetDataResyncs()
@@ -94,7 +94,7 @@ func replySeq() *msg.Seq {
 	return &msg.Seq{} //TODO !!!
 }
 
-// Ping checks the connectivity / measure the minimal transport latency
+// Ping checks the connectivity/ measures the minimal transport latency.
 func (s *DataMsgServiceServer) Ping(ctx context.Context, req *msg.PingRequest) (*msg.PingReply, error) {
 	return &msg.PingReply{"it works"}, nil
 }

@@ -1,9 +1,6 @@
 package: github.com/ligato/cn-sample-service
 import:
 - package: github.com/ligato/cn-infra
-  version: 7606172b55e0fcbbe398f09c4d3f5b4520c18e78
-- package: github.com/Sirupsen/logrus
-  version: v1.0.0
-  repo: https://github.com/sirupsen/logrus.git
-- package: google.golang.org/grpc
-  version: v1.5.1
+  version: 0c822c01bfb9bc0f9292d3e4ddcd910de3c021df
+- package: github.com/namsral/flag
+  version: ~1.7.4-pre

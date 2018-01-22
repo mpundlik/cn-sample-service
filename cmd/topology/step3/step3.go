@@ -16,7 +16,6 @@ import (
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/datasync"
 	"github.com/ligato/cn-infra/examples/model"
-	"github.com/ligato/cn-infra/logging/logroot"
 	"github.com/ligato/cn-infra/utils/safeclose"
 	"github.com/ligato/cn-sample-service/cmd/topology/model"
 	"strings"

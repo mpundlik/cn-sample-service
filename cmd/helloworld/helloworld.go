@@ -17,7 +17,6 @@ package main
 import (
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/flavors/local"
-	"github.com/ligato/cn-infra/logging/logroot"
 	"time"
 )
 

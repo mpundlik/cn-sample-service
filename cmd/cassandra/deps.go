@@ -10,6 +10,10 @@ import (
 	"github.com/namsral/flag"
 )
 
+var (
+	cassandraConfig string
+)
+
 type Deps struct {
 	// httpmux is a dependency of the plugin that needs to be injected.
 	local.PluginLogDeps
@@ -45,6 +49,6 @@ func (f *CassandraRestFlavor) Plugins() []*core.NamedPlugin {
 
 //init defines cassandra flags // TODO switch to viper to avoid global configuration
 func init() {
-	flag.String("cassandra-config", "cassandra.conf.yaml",
+	flag.StringVar(&cassandraConfig, "cassandra-config", "cassandra.conf.yaml",
 		"Location of the Cassandra Client configuration file; also set via 'CASSANDRA_CONFIG' env variable.")
 }

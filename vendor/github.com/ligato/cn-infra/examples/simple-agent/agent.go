@@ -16,22 +16,22 @@ package main
 
 import (
 	"os"
-	"time"
 
 	"github.com/ligato/cn-infra/core"
 	"github.com/ligato/cn-infra/flavors/connectors"
+	"github.com/ligato/cn-infra/flavors/local"
 	"github.com/ligato/cn-infra/flavors/rpc"
 	"github.com/ligato/cn-infra/logging"
-	"github.com/ligato/cn-infra/logging/logroot"
+	"github.com/ligato/cn-infra/logging/logrus"
 )
 
 func main() {
-	logroot.StandardLogger().SetLevel(logging.DebugLevel)
+	logrus.DefaultLogger().SetLevel(logging.DebugLevel)
 
-	connectors := connectors.AllConnectorsFlavor{}
-	rpcs := rpc.FlavorRPC{}
-	agent := core.NewAgent(logroot.StandardLogger(), 15*time.Second, append(
-		connectors.Plugins(), rpcs.Plugins()...)...)
+	loc := &local.FlavorLocal{}
+	connectors := connectors.AllConnectorsFlavor{FlavorLocal: loc}
+	rpcs := rpc.FlavorRPC{FlavorLocal: loc}
+	agent := core.NewAgent(core.Inject(&connectors, &rpcs))
 
 	err := core.EventLoopWithInterrupt(agent, nil)
 	if err != nil {
