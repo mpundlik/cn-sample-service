@@ -44,7 +44,7 @@ func main() {
 	agent := rpc.NewAgent(rpc.WithPlugins(func(rpc *rpc.FlavorRPC) []*core.NamedPlugin {
 
 		cassandraPlugin := &cassandra.Plugin{}
-		cassandraPlugin.Deps.PluginInfraDeps = *rpc.InfraDeps("cassandra-plugin", local.WithConf())
+		cassandraPlugin.Deps.PluginInfraDeps = *rpc.InfraDeps("cassandra", local.WithConf())
 
 		cassandraRestAPIPlugin := &CassandraRestAPIPlugin{}
 		cassandraRestAPIPlugin.pluginCompleted = pluginCompleted
