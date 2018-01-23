@@ -33,9 +33,9 @@ func insertTweet(db sql.Broker, id string) (err error) {
 //getAllTweets used to handle GET to get all tweets from cassandra database
 func getAllTweets(db sql.Broker, tweetTable *tweet) (result *[]tweetResource, err error) {
 
-	var tweets = &[]tweetResource{}
+	tweets := &[]tweetResource{}
 
-	query2 := sql.FROM(tweetTable, nil)
+	query2 := sql.FROM(tweetTable, sql.Exp(""))
 	err = sql.SliceIt(tweets, db.ListValues(query2))
 
 	if err != nil {
